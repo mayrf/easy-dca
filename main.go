@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
+
 	"github.com/joho/godotenv"
 	"github.com/mayrf/easy-dca/lib"
 )
@@ -43,6 +45,13 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 	}
 	return defaultValue
 }
+func loadFileToString(filepath string) (string, error) {
+    content, err := os.ReadFile(filepath)
+    if err != nil {
+        return "", fmt.Errorf("failed to read file %s: %w", filepath, err)
+    }
+    return string(content), nil
+}
 
 func main() {
 	log.Print("Trying to load environment variables from '.env' file")
@@ -51,8 +60,28 @@ func main() {
 		log.Print("Not found .env file")
 	}
 	pair := "BTC/EUR"
-	publicKey := os.Getenv("EASY_DCA_PUBLIC_KEY")
-	privateKey := os.Getenv("EASY_DCA_PRIVATE_KEY")
+
+	publicKey, err := loadFileToString(os.Getenv("EASY_DCA_PUBLIC_KEY_PATH"))
+	if err != nil {
+	        fmt.Printf("Error: %v\n", err)
+		publicKey = os.Getenv("EASY_DCA_PUBLIC_KEY")
+		if publicKey == "" {
+			fmt.Printf("Error: No PUBLIC_KEY found, neither via EASY_DCA_PUBLIC_KEY_PATH nor EASY_DCA_PUBLIC_KEY")
+			return
+		}
+	}
+	privateKey, err := loadFileToString(os.Getenv("EASY_DCA_PRIVATE_KEY_PATH"))
+	if err != nil {
+	        fmt.Printf("Error: %v\n", err)
+		privateKey = os.Getenv("EASY_DCA_PRIVATE_KEY")
+		if privateKey == "" {
+			fmt.Printf("Error: No PRIVATE_KEY found, neither via EASY_DCA_PRIVATE_KEY_PATH nor EASY_DCA_PRIVATE_KEY")
+			return
+		}
+	}
+
+	// publicKey := os.Getenv("EASY_DCA_PUBLIC_KEY")
+	// privateKey := os.Getenv("EASY_DCA_PRIVATE_KEY")
 	order_validation := getEnvAsBool("EASY_DCA_VALIDATION_ON", true)
 	priceFactor := getEnvAsFloat32("EASY_DCA_PRICEFACTOR", 0.998)
 	monthlyVolume := getEnvAsFloat32("EASY_DCA_MONTHLY_VOLUME", 140.0)
