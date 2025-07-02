@@ -28,8 +28,8 @@ type Request struct {
 }
 
 // AddOrder places a new limit buy order on Kraken.
-// Returns an error if the request fails or the API returns an error.
-func AddOrder(pair string, price float32, volume float32, publicKey string, privateKey string, validate bool) error {
+// Returns the parsed response and an error if the request fails or the API returns an error.
+func AddOrder(pair string, price float32, volume float32, publicKey string, privateKey string, validate bool) (*AddOrderResponse, error) {
 	resp, err := request(&Request{
 		Method: "POST",
 		Path:   "/0/private/AddOrder",
@@ -47,15 +47,24 @@ func AddOrder(pair string, price float32, volume float32, publicKey string, priv
 		Environment: "https://api.kraken.com",
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Printf("%s\n", data)
-	return nil
+	
+	var response AddOrderResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	
+	if len(response.Error) > 0 {
+		return &response, fmt.Errorf("API Error: %v", response.Error)
+	}
+	
+	return &response, nil
 }
 
 // GetOrderBook fetches the order book for a trading pair from Kraken.
@@ -186,4 +195,26 @@ func mapToURLValues(m map[string]any) (url.Values, error) {
 		}
 	}
 	return uv, nil
+}
+
+// FormatOrderResponse creates a nice log message from the AddOrder response
+func FormatOrderResponse(response *AddOrderResponse, isDryRun bool) string {
+	if response == nil {
+		return "No response received"
+	}
+	
+	mode := "DRY RUN"
+	if !isDryRun {
+		mode = "LIVE ORDER"
+	}
+	
+	orderDesc := response.Result.Descr.Order
+	
+	if len(response.Result.Txid) > 0 {
+		return fmt.Sprintf("[%s] Order placed successfully! Transaction ID: %s | %s", 
+			mode, response.Result.Txid[0], orderDesc)
+	} else {
+		return fmt.Sprintf("[%s] Order validated successfully! | %s", 
+			mode, orderDesc)
+	}
 } 

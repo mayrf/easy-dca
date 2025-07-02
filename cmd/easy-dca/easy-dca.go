@@ -99,14 +99,32 @@ func runDCA(cfg config.Config, notifier Notifier) {
 	if cfg.DryRun {
 		log.Printf("Dry run mode: order will only be validated, not executed.")
 	}
-	if err := kraken.AddOrder(cfg.Pair, float32(buyPrice), float32(buyVolume), cfg.PublicKey, cfg.PrivateKey, cfg.DryRun); err != nil {
+	orderResponse, err := kraken.AddOrder(cfg.Pair, float32(buyPrice), float32(buyVolume), cfg.PublicKey, cfg.PrivateKey, cfg.DryRun)
+	if err != nil {
 		log.Printf("Failed to add order: %v", err)
 		if notifier != nil {
 			notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to add order: %v", err))
 		}
 		return
 	}
-	msg := fmt.Sprintf("Ordered %.8f BTC at %.2f EUR (total %.2f EUR)", buyVolume, buyPrice, buyPrice*buyVolume)
+	
+	// Log the formatted order response
+	log.Print(kraken.FormatOrderResponse(orderResponse, cfg.DryRun))
+	
+	// Create notification message with order details
+	var msg string
+	if cfg.DryRun {
+		msg = fmt.Sprintf("DRY RUN: Validated order for %.8f BTC at %.2f EUR (total %.2f EUR)", buyVolume, buyPrice, buyPrice*buyVolume)
+	} else {
+		if len(orderResponse.Result.Txid) > 0 {
+			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f EUR (total %.2f EUR) | TXID: %s", 
+				buyVolume, buyPrice, buyPrice*buyVolume, orderResponse.Result.Txid[0])
+		} else {
+			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f EUR (total %.2f EUR)", 
+				buyVolume, buyPrice, buyPrice*buyVolume)
+		}
+	}
+	
 	if notifier != nil {
 		err := notifier.Notify(context.Background(), "DCA Success", msg)
 		if err != nil {

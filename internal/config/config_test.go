@@ -7,7 +7,7 @@ import (
 func TestLoadConfig_Success(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
-	t.Setenv("EASY_DCA_VALIDATION_ON", "false")
+	t.Setenv("EASY_DCA_DRY_RUN", "false")
 	t.Setenv("EASY_DCA_PRICEFACTOR", "0.95")
 	t.Setenv("EASY_DCA_MONTHLY_VOLUME", "60.0")
 
@@ -21,8 +21,8 @@ func TestLoadConfig_Success(t *testing.T) {
 	if cfg.PrivateKey != "test-private" {
 		t.Errorf("expected private key 'test-private', got '%s'", cfg.PrivateKey)
 	}
-	if cfg.OrderValidation != false {
-		t.Errorf("expected OrderValidation false, got %v", cfg.OrderValidation)
+	if cfg.DryRun != false {
+		t.Errorf("expected DryRun false, got %v", cfg.DryRun)
 	}
 	if cfg.PriceFactor != 0.95 {
 		t.Errorf("expected PriceFactor 0.95, got %v", cfg.PriceFactor)
