@@ -53,7 +53,7 @@ The app will run on the schedule you set in `EASY_DCA_CRON` and send notificatio
 - `EASY_DCA_CRON`: Cron expression for scheduling (optional; if not set, runs once)
 - `NOTIFY_METHOD`: Notification method (e.g., `ntfy`)
 - `NOTIFY_NTFY_TOPIC`: ntfy topic (if using ntfy)
-- `NOTIFY_NTFY_URL`: ntfy server URL (optional, defaults to ntfy.sh)
+- `NOTIFY_NTFY_URL`: ntfy server URL (**required for ntfy notifications**; no default)
 - `EASY_DCA_DRY_RUN`: If true (default), only validate orders (dry run); if false, actually place orders.
 
 ## Secret Management: Using Key Path Variables
@@ -204,3 +204,5 @@ Edit these files with your real values before deploying.
 ## Transparency & AI Involvement
 
 This project was developed with the assistance of large language model (LLM) coding agents. Automated code suggestions, refactoring, and documentation were generated and reviewed as part of the development process. Please review and audit the code for your own use case and security requirements. 
+
+> **Note:** For ntfy notifications, both `NOTIFY_NTFY_TOPIC` and `NOTIFY_NTFY_URL` must be set. If `NOTIFY_NTFY_URL` is missing, notifications will be disabled and a warning will be logged.

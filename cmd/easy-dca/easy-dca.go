@@ -32,11 +32,10 @@ func (n *NtfyNotifier) Notify(ctx context.Context, subject, message string) erro
 	if n.Topic == "" {
 		return fmt.Errorf("ntfy topic is not set")
 	}
-	url := n.URL
-	if url == "" {
-		url = "https://ntfy.sh"
+	if n.URL == "" {
+		return fmt.Errorf("ntfy URL is not set")
 	}
-	ntfyURL := fmt.Sprintf("%s/%s", strings.TrimRight(url, "/"), n.Topic)
+	ntfyURL := fmt.Sprintf("%s/%s", strings.TrimRight(n.URL, "/"), n.Topic)
 	req, err := http.NewRequestWithContext(ctx, "POST", ntfyURL, strings.NewReader(message))
 	if err != nil {
 		return err
@@ -59,6 +58,10 @@ func (n *NtfyNotifier) Notify(ctx context.Context, subject, message string) erro
 func getNotifier(cfg config.Config) Notifier {
 	switch strings.ToLower(cfg.NotifyMethod) {
 	case "ntfy":
+		if cfg.NotifyNtfyURL == "" {
+			log.Print("Warning: NOTIFY_NTFY_URL is required for ntfy notifications but is not set. Notifications will be disabled.")
+			return nil
+		}
 		return &NtfyNotifier{Topic: cfg.NotifyNtfyTopic, URL: cfg.NotifyNtfyURL}
 	// Add more cases for other notification methods (slack, email, etc.)
 	default:
@@ -121,10 +124,21 @@ func main() {
 		return
 	}
 
-	log.Print("Trying to load environment variables from '.env' file")
+	log.Print("Loading environment variables from .env file...")
 	err := godotenv.Load()
 	if err != nil {
-		log.Print("Not found .env file")
+		// Check if the error is due to file not existing
+		if strings.Contains(err.Error(), "no such file or directory") {
+			log.Print(".env file not found (skipping, using process environment)")
+		} else {
+			log.Printf("Error loading .env file: %v (continuing with process environment)", err)
+		}
+	} else {
+		envMap, _ := godotenv.Read()
+		log.Print("Loaded variables from .env file:")
+		for key := range envMap {
+			log.Printf("- %s", key)
+		}
 	}
 
 	cronFlag := flag.String("cron", "", "Cron expression for scheduling (overrides EASY_DCA_CRON)")
