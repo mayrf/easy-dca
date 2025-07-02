@@ -7,14 +7,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
-	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 	"github.com/mayrf/easy-dca/internal/kraken"
-	"github.com/mayrf/easy-dca/internal/order"
 	"github.com/mayrf/easy-dca/internal/config"
 )
 
