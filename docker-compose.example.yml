@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  easy-dca:
+    build: .
+    image: easy-dca:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    secrets:
+      - kraken-public-key
+      - kraken-private-key
+    environment:
+      EASY_DCA_PUBLIC_KEY_PATH: "/run/secrets/kraken-public-key"
+      EASY_DCA_PRIVATE_KEY_PATH: "/run/secrets/kraken-private-key"
+      # ... other env vars can be set in .env or here ...
+
+secrets:
+  kraken-public-key:
+    file: ./examples/public.key.example
+  kraken-private-key:
+    file: ./examples/private.key.example 

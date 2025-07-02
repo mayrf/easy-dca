@@ -1,4 +1,5 @@
-package lib
+// Package kraken provides functions for interacting with the Kraken cryptocurrency exchange API.
+package kraken
 
 import (
 	"bytes"
@@ -9,87 +10,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 )
 
-// Order represents a single order entry [price, volume, timestamp]
-type Order struct {
-	Price     float64
-	Volume    float64
-	Timestamp float64
+// Request represents an HTTP request to the Kraken API.
+type Request struct {
+	Method      string
+	Path        string
+	Query       map[string]any
+	Body        map[string]any
+	PublicKey   string
+	PrivateKey  string
+	Environment string
 }
 
-// UnmarshalJSON implements json.Unmarshaler for Order
-func (o *Order) UnmarshalJSON(data []byte) error {
-	var arr []interface{}
-	if err := json.Unmarshal(data, &arr); err != nil {
-		return err
-	}
-	if len(arr) != 3 {
-		return fmt.Errorf("expected array of 3 elements, got %d", len(arr))
-	}
-
-	// Convert each element to float64, handling both string and number types
-	for i, val := range arr {
-		var floatVal float64
-		var err error
-
-		switch v := val.(type) {
-		case string:
-			floatVal, err = strconv.ParseFloat(v, 64)
-			if err != nil {
-				return fmt.Errorf("failed to parse string to float: %v", err)
-			}
-		case float64:
-			floatVal = v
-		case int:
-			floatVal = float64(v)
-		default:
-			return fmt.Errorf("unexpected type %T for array element", v)
-		}
-
-		// Assign to appropriate field
-		switch i {
-		case 0:
-			o.Price = floatVal
-		case 1:
-			o.Volume = floatVal
-		case 2:
-			o.Timestamp = floatVal
-		}
-	}
-
-	return nil
-}
-
-// OrderBook represents the asks and bids for a trading pair
-type OrderBook struct {
-	Asks []Order `json:"asks"`
-	Bids []Order `json:"bids"`
-}
-
-// KrakenResponse represents the complete API response structure
-type OrderBookResponse struct {
-	Error  []string             `json:"error"`
-	Result map[string]OrderBook `json:"result"`
-}
-
-// Helper methods for Order - now direct field access
-func (o Order) GetPrice() float64     { return o.Price }
-func (o Order) GetVolume() float64    { return o.Volume }
-func (o Order) GetTimestamp() float64 { return o.Timestamp }
-
-func trimFloat32ToOneDecimal(f float32) float32 {
-	return float32(math.Round(float64(f)*10) / 10)
-}
-
-
-func AddOrder(pair string, price float32, volume float32, publicKey string, privateKey string, validate bool) {
+// AddOrder places a new limit buy order on Kraken.
+// Returns an error if the request fails or the API returns an error.
+func AddOrder(pair string, price float32, volume float32, publicKey string, privateKey string, validate bool) error {
 	resp, err := request(&Request{
 		Method: "POST",
 		Path:   "/0/private/AddOrder",
@@ -97,12 +37,9 @@ func AddOrder(pair string, price float32, volume float32, publicKey string, priv
 			"ordertype": "limit",
 			"type":      "buy",
 			"volume":    volume,
-			// "pair":        "BTC/USD",
 			"pair":   pair,
 			"price":  trimFloat32ToOneDecimal(price),
 			"oflags": "post",
-			// "timeinforce": "GTD",
-			// "expiretm":    "+5",
 			"validate": validate,
 		},
 		PublicKey:   publicKey,
@@ -110,19 +47,20 @@ func AddOrder(pair string, price float32, volume float32, publicKey string, priv
 		Environment: "https://api.kraken.com",
 	})
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	fmt.Printf("%s\n", data)
-
+	return nil
 }
 
-// func GetOrderBook(pair string, count int) map[string]interface{} []byte {
-func GetOrderBook(pair string, count int) OrderBookResponse {
+// GetOrderBook fetches the order book for a trading pair from Kraken.
+// Returns the order book response or an error.
+func GetOrderBook(pair string, count int) (OrderBookResponse, error) {
 	resp, err := request(&Request{
 		Method: "GET",
 		Path:   "/0/public/Depth",
@@ -133,35 +71,30 @@ func GetOrderBook(pair string, count int) OrderBookResponse {
 		Environment: "https://api.kraken.com",
 	})
 	if err != nil {
-		panic(err)
+		return OrderBookResponse{}, err
 	}
 
 	defer resp.Body.Close()
 	jsonData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return OrderBookResponse{}, err
+	}
 
 	var response OrderBookResponse
 	if err := json.Unmarshal([]byte(jsonData), &response); err != nil {
-		log.Fatal(err)
+		return OrderBookResponse{}, err
 	}
 
-	// Check for API errors
 	if len(response.Error) > 0 {
-		fmt.Printf("API Error: %v\n", response.Error)
-		// return
+		return response, fmt.Errorf("API Error: %v", response.Error)
 	}
 
-	return response
-
+	return response, nil
 }
 
-type Request struct {
-	Method      string
-	Path        string
-	Query       map[string]any
-	Body        map[string]any
-	PublicKey   string
-	PrivateKey  string
-	Environment string
+// trimFloat32ToOneDecimal rounds down a float32 to one decimal place.
+func trimFloat32ToOneDecimal(f float32) float32 {
+	return float32(math.Floor(float64(f)*10) / 10)
 }
 
 func request(c *Request) (*http.Response, error) {
@@ -253,4 +186,4 @@ func mapToURLValues(m map[string]any) (url.Values, error) {
 		}
 	}
 	return uv, nil
-}
+} 
