@@ -1,114 +1,162 @@
+// Command easy-dca is the entrypoint for the DCA trading application using the Kraken API.
 package main
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
-	"strconv"
+	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/mayrf/easy-dca/lib"
+	"github.com/robfig/cron/v3"
+	"github.com/mayrf/easy-dca/internal/kraken"
+	"github.com/mayrf/easy-dca/internal/order"
+	"github.com/mayrf/easy-dca/internal/config"
 )
 
-type OrderBook struct {
-	Asks [][]float64 `json:"asks"`
-	Bids [][]float64 `json:"bids"`
+var Version = "dev"
+
+// Notifier is an interface for sending notifications.
+type Notifier interface {
+	Notify(ctx context.Context, subject, message string) error
 }
 
-type OrderBookResponse struct {
-	Eror [][]float64 `json:"asks"`
-	Bids [][]float64 `json:"bids"`
+// NtfyNotifier sends notifications via ntfy.sh or a custom ntfy server.
+type NtfyNotifier struct {
+	Topic string
+	URL   string
 }
 
-func getEnvAsInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
+func (n *NtfyNotifier) Notify(ctx context.Context, subject, message string) error {
+	if n.Topic == "" {
+		return fmt.Errorf("ntfy topic is not set")
 	}
-	return defaultValue
-}
-
-func getEnvAsFloat32(key string, defaultValue float32) float32 {
-	if value := os.Getenv(key); value != "" {
-		if floatValue, err := strconv.ParseFloat(value, 32); err == nil {
-			return float32(floatValue)
-		}
+	url := n.URL
+	if url == "" {
+		url = "https://ntfy.sh"
 	}
-	return defaultValue
-}
-func getEnvAsBool(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		if boolValue, err := strconv.ParseBool(value); err == nil {
-			return boolValue
-		}
-	}
-	return defaultValue
-}
-func loadFileToString(filepath string) (string, error) {
-    content, err := os.ReadFile(filepath)
-    if err != nil {
-        return "", fmt.Errorf("failed to read file %s: %w", filepath, err)
-    }
-    return string(content), nil
-}
-
-func main() {
-	log.Print("Trying to load environment variables from '.env' file")
-	err := godotenv.Load()
+	ntfyURL := fmt.Sprintf("%s/%s", strings.TrimRight(url, "/"), n.Topic)
+	req, err := http.NewRequestWithContext(ctx, "POST", ntfyURL, strings.NewReader(message))
 	if err != nil {
-		log.Print("Not found .env file")
+		return err
 	}
-	pair := "BTC/EUR"
-
-	publicKey, err := loadFileToString(os.Getenv("EASY_DCA_PUBLIC_KEY_PATH"))
+	if subject != "" {
+		req.Header.Set("Title", subject)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-	        fmt.Printf("Error: %v\n", err)
-		publicKey = os.Getenv("EASY_DCA_PUBLIC_KEY")
-		if publicKey == "" {
-			fmt.Printf("Error: No PUBLIC_KEY found, neither via EASY_DCA_PUBLIC_KEY_PATH nor EASY_DCA_PUBLIC_KEY")
-			return
-		}
+		return err
 	}
-	privateKey, err := loadFileToString(os.Getenv("EASY_DCA_PRIVATE_KEY_PATH"))
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("ntfy notification failed: %s", resp.Status)
+	}
+	return nil
+}
+
+// getNotifier returns a Notifier based on config.
+func getNotifier(cfg config.Config) Notifier {
+	switch strings.ToLower(cfg.NotifyMethod) {
+	case "ntfy":
+		return &NtfyNotifier{Topic: cfg.NotifyNtfyTopic, URL: cfg.NotifyNtfyURL}
+	// Add more cases for other notification methods (slack, email, etc.)
+	default:
+		return nil
+	}
+}
+
+// runDCA performs one DCA cycle and sends a notification if configured.
+func runDCA(cfg config.Config, notifier Notifier) {
+	log.Printf("Fetching orders for %s", cfg.Pair)
+	response, err := kraken.GetOrderBook(cfg.Pair, 10)
 	if err != nil {
-	        fmt.Printf("Error: %v\n", err)
-		privateKey = os.Getenv("EASY_DCA_PRIVATE_KEY")
-		if privateKey == "" {
-			fmt.Printf("Error: No PRIVATE_KEY found, neither via EASY_DCA_PRIVATE_KEY_PATH nor EASY_DCA_PRIVATE_KEY")
-			return
+		log.Printf("Failed to fetch order book: %v", err)
+		if notifier != nil {
+			notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to fetch order book: %v", err))
 		}
+		return
 	}
-
-	// publicKey := os.Getenv("EASY_DCA_PUBLIC_KEY")
-	// privateKey := os.Getenv("EASY_DCA_PRIVATE_KEY")
-	order_validation := getEnvAsBool("EASY_DCA_VALIDATION_ON", true)
-	priceFactor := getEnvAsFloat32("EASY_DCA_PRICEFACTOR", 0.998)
-	monthlyVolume := getEnvAsFloat32("EASY_DCA_MONTHLY_VOLUME", 140.0)
-	dailyVolume := monthlyVolume / 30.0
-
-	if priceFactor >= 1 {
-		panic("priceFactor must be smaller than 1 in order to place a limit order as a maker")
-	}
-
-	log.Printf("Fetching orders for %s", pair)
-	response := lib.GetOrderBook(pair, 10)
-	orderBook := response.Result[pair]
+	orderBook := response.Result[cfg.Pair]
 	log.Printf("Best Ask: Price=%.2f, Volume=%.3f\n",
 		orderBook.Asks[0].Price, orderBook.Asks[0].Volume)
 
 	log.Printf("Best Bid: Price=%.2f, Volume=%.3f\n",
 		orderBook.Bids[0].Price, orderBook.Bids[0].Volume)
 
-	buyPrice := priceFactor * float32(orderBook.Asks[0].Price)
-	buyVolume := dailyVolume / buyPrice
+	buyPrice := cfg.PriceFactor * float32(orderBook.Asks[0].Price)
+	buyVolume := cfg.DailyVolume / buyPrice
 	if buyVolume < 0.00005 {
 		log.Printf("Order volume of %.8f BTC is too small. Miminum is 0.00005 BTC", buyVolume)
 		log.Printf("Setting order volume to 0.00005 BTC")
 		buyVolume = 0.00005
-
 	}
-	log.Printf("Ordering price factor: %.4f, Ordering Price: %.2f", priceFactor, buyPrice)
+	log.Printf("Ordering price factor: %.4f, Ordering Price: %.2f", cfg.PriceFactor, buyPrice)
 	log.Printf("Ordering %.8f BTC at a price of %.2f for a total of %.2f Euro", buyVolume, buyPrice, buyPrice*buyVolume)
-	lib.AddOrder("BTC/EUR", float32(buyPrice), float32(buyVolume), publicKey, privateKey, order_validation)
+	if cfg.DryRun {
+		log.Printf("Dry run mode: order will only be validated, not executed.")
+	}
+	if err := kraken.AddOrder(cfg.Pair, float32(buyPrice), float32(buyVolume), cfg.PublicKey, cfg.PrivateKey, !cfg.DryRun); err != nil {
+		log.Printf("Failed to add order: %v", err)
+		if notifier != nil {
+			notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to add order: %v", err))
+		}
+		return
+	}
+	msg := fmt.Sprintf("Ordered %.8f BTC at %.2f EUR (total %.2f EUR)", buyVolume, buyPrice, buyPrice*buyVolume)
+	if notifier != nil {
+		err := notifier.Notify(context.Background(), "DCA Success", msg)
+		if err != nil {
+			log.Printf("Failed to send notification: %v", err)
+		}
+	}
+}
+
+// main is the entrypoint for the easy-dca CLI application.
+func main() {
+	versionFlag := flag.Bool("version", false, "Print version and exit")
+	flag.Parse()
+	if *versionFlag {
+		fmt.Println("easy-dca version:", Version)
+		return
+	}
+
+	log.Print("Trying to load environment variables from '.env' file")
+	err := godotenv.Load()
+	if err != nil {
+		log.Print("Not found .env file")
+	}
+
+	cronFlag := flag.String("cron", "", "Cron expression for scheduling (overrides EASY_DCA_CRON)")
+	flag.Parse()
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		return
+	}
+
+	// CLI flag overrides env
+	cronExpr := *cronFlag
+	if cronExpr == "" {
+		cronExpr = cfg.CronExpr
+	}
+
+	notifier := getNotifier(cfg)
+
+	if cronExpr != "" {
+		c := cron.New()
+		_, err := c.AddFunc(cronExpr, func() { runDCA(cfg, notifier) })
+		if err != nil {
+			log.Fatalf("Invalid cron expression: %v", err)
+		}
+		log.Printf("Running in cron mode: %s", cronExpr)
+		c.Start()
+		select {} // Block forever
+	} else {
+		runDCA(cfg, notifier)
+	}
 }

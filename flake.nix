@@ -166,6 +166,15 @@
                   ProtectKernelTunables = true;
                   ProtectKernelModules = true;
                   ProtectControlGroups = true;
+                  ProtectProc = "invisible";
+                  RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
+                  CapabilityBoundingSet = "";
+                  PrivateDevices = true;
+                  ProtectClock = true;
+                  ProtectHostname = true;
+                  ProtectKernelLogs = true;
+                  RestrictRealtime = true;
+                  SystemCallFilter = [ "@system-service" ];
                   LoadCredential = mapAttrsToList
                     (envVar: secretPath: "${envVar}:${secretPath}")
                     cfg.credentials;
