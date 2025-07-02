@@ -17,33 +17,51 @@ git clone https://github.com/mayrf/easy-dca.git
 cd easy-dca
 ```
 
-### 2. Create a `docker-compose.yml` file
-Example:
-```yaml
-version: '3.8'
-services:
-  easy-dca:
-    build: .
-    image: easy-dca:latest
-    restart: unless-stopped
-    environment:
-      EASY_DCA_PUBLIC_KEY: "your_public_key"
-      EASY_DCA_PRIVATE_KEY: "your_private_key"
-      EASY_DCA_PRICEFACTOR: "0.998"
-      EASY_DCA_MONTHLY_VOLUME: "140.0"
-      EASY_DCA_CRON: "0 8 * * *" # Run every day at 8:00 UTC
-      NOTIFY_METHOD: "ntfy"
-      NOTIFY_NTFY_TOPIC: "yourtopic"
-      EASY_DCA_DRY_RUN: "true" # Only validate orders (default)
-      # NOTIFY_NTFY_URL: "https://ntfy.sh" # Optional, defaults to ntfy.sh
+### 2. Create a `.env` file
+Copy the example and fill in your values:
+```sh
+cp .env.example .env
+# Edit .env with your actual values
 ```
 
-### 3. Build and run
+### 3. Create a `docker-compose.yml` file
+Copy the example:
+```sh
+cp docker-compose.example.yml docker-compose.yml
+```
+
+### 4. Build and run
 ```sh
 docker-compose up --build
 ```
 
 The app will run on the schedule you set in `EASY_DCA_CRON` and send notifications via ntfy.
+
+## Quick Start (Local Development)
+
+### 1. Clone the repository
+```sh
+git clone https://github.com/mayrf/easy-dca.git
+cd easy-dca
+```
+
+### 2. Create a `.env` file
+```sh
+cp .env.example .env
+# Edit .env with your actual values
+```
+
+### 3. Run the application
+```sh
+# Run once
+./scripts/test-once.sh
+
+# Run with cron (set EASY_DCA_CRON in .env)
+./scripts/test-cron.sh
+
+# Run with cron flag
+./scripts/test-cron-flag.sh
+```
 
 ## Environment Variables
 - `EASY_DCA_PUBLIC_KEY`: Kraken API public key (**required**)
@@ -189,17 +207,29 @@ Please see the LICENSE file for details.
 - `.env.example`: Template for environment variables. Copy to `.env` and fill in your values.
 - `docker-compose.example.yml`: Reference Compose file showing best practices for secrets and env config.
 - `examples/public.key.example`, `examples/private.key.example`: Example key files for use with Docker secrets or NixOS credentials. Replace with your real keys in production.
+- `scripts/`: Utility scripts for running the application in different modes.
 
-To get started:
+### Getting Started
 
 ```sh
+# 1. Copy and configure environment variables
 cp .env.example .env
+# Edit .env with your real values
+
+# 2. For Docker Compose (optional)
 cp docker-compose.example.yml docker-compose.yml
+
+# 3. For Docker secrets (optional)
 cp examples/public.key.example examples/public.key
 cp examples/private.key.example examples/private.key
+# Edit these files with your real API keys
+
+# 4. Run the application
+./scripts/test-once.sh  # Run once
+./scripts/test-cron.sh  # Run with cron (set EASY_DCA_CRON in .env)
 ```
 
-Edit these files with your real values before deploying.
+**Important:** Always edit the copied files with your real values before deploying.
 
 ## Transparency & AI Involvement
 
