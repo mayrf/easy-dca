@@ -18,6 +18,7 @@
           src = ./.;
 
           vendorHash = "sha256-NHTKwUSIbNCUco88JbHOo3gt6S37ggee+LWNbHaRGEs=";
+          subPackages = [ "cmd/easy-dca" ];
 
           # Optional: specify Go version if needed
           buildInputs = [ pkgs.go_1_24 ];
