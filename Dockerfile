@@ -4,7 +4,9 @@ FROM cgr.dev/chainguard/go:latest AS builder
 WORKDIR /app
 COPY . .
 ARG VERSION=dev
-RUN go build -ldflags "-X main.Version=${VERSION}" -o easy-dca ./cmd/easy-dca
+# Ensure a fully static build
+ENV CGO_ENABLED=0
+RUN go build -ldflags "-X main.Version=${VERSION} -extldflags '-static'" -o easy-dca ./cmd/easy-dca
 
 FROM cgr.dev/chainguard/static:latest
 COPY --from=builder /app/easy-dca /easy-dca
