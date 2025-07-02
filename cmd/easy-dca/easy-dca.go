@@ -99,7 +99,7 @@ func runDCA(cfg config.Config, notifier Notifier) {
 	if cfg.DryRun {
 		log.Printf("Dry run mode: order will only be validated, not executed.")
 	}
-	if err := kraken.AddOrder(cfg.Pair, float32(buyPrice), float32(buyVolume), cfg.PublicKey, cfg.PrivateKey, !cfg.DryRun); err != nil {
+	if err := kraken.AddOrder(cfg.Pair, float32(buyPrice), float32(buyVolume), cfg.PublicKey, cfg.PrivateKey, cfg.DryRun); err != nil {
 		log.Printf("Failed to add order: %v", err)
 		if notifier != nil {
 			notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to add order: %v", err))
