@@ -25,15 +25,6 @@ type Config struct {
 	// Add more fields for other notification methods as needed
 }
 
-func getEnvAsInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
-}
-
 func getEnvAsFloat32(key string, defaultValue float32) float32 {
 	if value := os.Getenv(key); value != "" {
 		if floatValue, err := strconv.ParseFloat(value, 32); err == nil {

@@ -76,7 +76,9 @@ func runDCA(cfg config.Config, notifier Notifier) {
 	if err != nil {
 		log.Printf("Failed to fetch order book: %v", err)
 		if notifier != nil {
-			notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to fetch order book: %v", err))
+			if err := notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to fetch order book: %v", err)); err != nil {
+				log.Printf("Failed to send notification: %v", err)
+			}
 		}
 		return
 	}
@@ -103,7 +105,9 @@ func runDCA(cfg config.Config, notifier Notifier) {
 	if err != nil {
 		log.Printf("Failed to add order: %v", err)
 		if notifier != nil {
-			notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to add order: %v", err))
+			if err := notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to add order: %v", err)); err != nil {
+				log.Printf("Failed to send notification: %v", err)
+			}
 		}
 		return
 	}
