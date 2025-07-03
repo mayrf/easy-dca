@@ -1,7 +1,5 @@
 # easy-dca
 
-[![codecov](https://codecov.io/gh/mayrf/easy-dca/branch/master/graph/badge.svg)](https://codecov.io/gh/mayrf/easy-dca)
-
 A Go application for automated DCA (Dollar Cost Averaging) trading on Kraken, with cron scheduling and pluggable notifications (ntfy, etc).
 
 ## Features
@@ -124,7 +122,6 @@ If both the `*_KEY_PATH` and the direct `*_KEY` variables are set, the path-base
 
 ## CI/CD
 - GitHub Actions workflow runs linting, tests, and builds the Docker image on every push and pull request to `master`.
-- Code coverage is reported to [Codecov](https://codecov.io/gh/mayrf/easy-dca) and a badge is shown above.
 - Linting is performed using `golangci-lint` to ensure code quality.
 
 ## Extending Notifications
