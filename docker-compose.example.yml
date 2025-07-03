@@ -11,6 +11,18 @@ services:
     environment:
       EASY_DCA_PUBLIC_KEY_PATH: "/run/secrets/kraken-public-key"
       EASY_DCA_PRIVATE_KEY_PATH: "/run/secrets/kraken-private-key"
+      # Example: Buy 10 EUR every day at 8 AM
+      EASY_DCA_AMOUNT_PER_BUY: "10"
+      EASY_DCA_CRON: "0 8 * * *"
+      # Alternative: Spend 300 EUR per month, app calculates per-buy amount
+      # EASY_DCA_MONTHLY_VOLUME: "300"
+      # EASY_DCA_CRON: "0 8 */3 * *"  # Every 3 days
+      
+      # Price factor examples:
+      EASY_DCA_PRICEFACTOR: "0.998"  # Conservative: 99.8% of ask price (high fill probability)
+      # EASY_DCA_PRICEFACTOR: "0.9995" # Very conservative: 99.95% of ask price (very high fill probability)
+      # EASY_DCA_PRICEFACTOR: "0.99"   # Balanced: 99% of ask price (good balance)
+      # EASY_DCA_PRICEFACTOR: "0.97"   # Aggressive: 97% of ask price (higher savings, lower fill rate)
 
 secrets:
   kraken-public-key:

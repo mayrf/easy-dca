@@ -1,4 +1,13 @@
-// Package kraken provides functions for interacting with the Kraken cryptocurrency exchange API.
+// Package kraken provides integration with the Kraken cryptocurrency exchange API.
+//
+// ⚠️  EXPERIMENTAL API INTEGRATION: This Kraken API integration is experimental
+// and may contain bugs or errors. Order placement logic may fail, price calculations
+// may be incorrect, and API calls may timeout or return unexpected results.
+// The maintainers take NO responsibility for failed trades, incorrect orders,
+// financial losses, or any damages resulting from the use of this API integration.
+// USE AT YOUR OWN RISK.
+//
+// See LICENSE file for full legal terms and conditions.
 package kraken
 
 import (

@@ -2,6 +2,53 @@
 
 A Go application for automated DCA (Dollar Cost Averaging) trading on Kraken, with cron scheduling and pluggable notifications (ntfy, etc).
 
+## ⚠️ DISCLAIMER
+
+**IMPORTANT: This software is provided "AS IS" without any warranties.**
+
+### Financial Risk Disclaimer
+- **Trading cryptocurrencies involves substantial risk of loss**
+- **You can lose some or all of your invested capital**
+- **Past performance does not guarantee future results**
+- **The maintainers of this repository are NOT financial advisors**
+
+### Software Disclaimer
+- **This software may contain bugs or errors**
+- **API integrations may fail or behave unexpectedly**
+- **The maintainers take NO responsibility for:**
+  - Financial losses from trading
+  - API failures or incorrect orders
+  - Software bugs or malfunctions
+  - Data corruption or loss
+  - Any other damages or losses
+
+### Kraken API Disclaimer
+- **Kraken API integration is experimental and may fail**
+- **Order placement logic may contain errors**
+- **Price calculations and order sizing may be incorrect**
+- **API rate limits and errors are not fully handled**
+- **The maintainers are NOT responsible for:**
+  - Failed trades or missed opportunities
+  - Incorrect order amounts or prices
+  - API timeouts or connection issues
+  - Account restrictions or suspensions
+
+### Usage Agreement
+By using this software, you acknowledge that:
+- You understand the risks involved in cryptocurrency trading
+- You are responsible for your own trading decisions
+- You accept all risks and potential losses
+- You will not hold the maintainers liable for any damages
+- You have tested the software thoroughly before live trading
+
+**USE AT YOUR OWN RISK. ONLY TRADE WITH MONEY YOU CAN AFFORD TO LOSE.**
+
+### Legal Notice
+This software is licensed under the GNU General Public License v3.0 (see LICENSE file). 
+The GPL includes standard warranty disclaimers. The financial disclaimers above are 
+in addition to those standard disclaimers and specifically address the risks of 
+cryptocurrency trading and API integration.
+
 ## Features
 - Run once or on a schedule (cron expression via CLI flag or env var)
 - Pluggable notification system (ntfy supported, extensible for others)
@@ -67,12 +114,78 @@ cp .env.example .env
 - `EASY_DCA_PUBLIC_KEY`: Kraken API public key (**required**)
 - `EASY_DCA_PRIVATE_KEY`: Kraken API private key (**required**)
 - `EASY_DCA_PRICEFACTOR`: Price factor for limit orders (default: 0.998)
-- `EASY_DCA_MONTHLY_VOLUME`: Monthly trading volume (default: 140.0)
+- `EASY_DCA_MONTHLY_FIAT_SPENDING`: Monthly fiat spending in EUR (optional, used if EASY_DCA_FIAT_AMOUNT_PER_BUY is not set)
+- `EASY_DCA_FIAT_AMOUNT_PER_BUY`: Fixed fiat amount in EUR to spend each run (optional, takes precedence over EASY_DCA_MONTHLY_FIAT_SPENDING)
 - `EASY_DCA_CRON`: Cron expression for scheduling (optional; if not set, runs once)
+- `EASY_DCA_AUTO_ADJUST_MIN_ORDER`: If true, automatically adjust orders below minimum size (0.00005 BTC); if false, let them fail (default: false)
+- `EASY_DCA_SCHEDULER_MODE`: Scheduler mode: "cron", "systemd", or "manual" (default: "cron" if EASY_DCA_CRON is set, otherwise "manual")
 - `NOTIFY_METHOD`: Notification method (e.g., `ntfy`)
 - `NOTIFY_NTFY_TOPIC`: ntfy topic (if using ntfy)
 - `NOTIFY_NTFY_URL`: ntfy server URL (**required for ntfy notifications**; no default)
 - `EASY_DCA_DRY_RUN`: If true (default), only validate orders (dry run); if false, actually place orders.
+
+### Buy Amount Configuration
+
+The app supports two ways to configure how much to buy:
+
+1. **Fixed amount per buy**: Set `EASY_DCA_FIAT_AMOUNT_PER_BUY` to spend the same fiat amount each time
+2. **Monthly amount**: Set `EASY_DCA_MONTHLY_FIAT_SPENDING` and the app will divide it by the number of buys per month (calculated from your cron schedule)
+
+**Examples:**
+
+- **Spend 10 EUR every day**: Set `EASY_DCA_FIAT_AMOUNT_PER_BUY=10` and `EASY_DCA_CRON="0 8 * * *"`
+- **Spend 300 EUR per month, buying every 3 days**: Set `EASY_DCA_MONTHLY_FIAT_SPENDING=300` and `EASY_DCA_CRON="0 8 */3 * *"` (app will spend ~30 EUR each time)
+- **Spend 150 EUR per month, buying weekly**: Set `EASY_DCA_MONTHLY_FIAT_SPENDING=150` and `EASY_DCA_CRON="0 8 * * 1"` (app will spend ~37.5 EUR each time)
+
+**Note:** If both `EASY_DCA_FIAT_AMOUNT_PER_BUY` and `EASY_DCA_MONTHLY_FIAT_SPENDING` are set, the fixed amount per buy takes precedence.
+
+### Minimum Order Size Behavior
+
+Kraken has a minimum order size of 0.00005 BTC. The app handles this in two ways:
+
+1. **Warning**: If your order size is below 0.000055 BTC (10% above minimum), you'll get a warning
+2. **Auto-adjustment**: If your order is below 0.00005 BTC, the behavior depends on `EASY_DCA_AUTO_ADJUST_MIN_ORDER`:
+   - **`false` (default)**: Order proceeds as-is and will likely fail, but the cron job continues running
+   - **`true`**: Order size is automatically increased to 0.00005 BTC (you'll spend more fiat than configured)
+
+**Example scenarios:**
+- **Small daily DCA**: `EASY_DCA_FIAT_AMOUNT_PER_BUY=1` with daily cron and BTC at €50,000; 1 EUR per day = 0.00002 BTC → **Warning + likely failure**
+- **Small weekly DCA**: `EASY_DCA_MONTHLY_FIAT_SPENDING=10` with weekly cron and BTC at €50,000. 2.5 EUR per week = 0.00005 BTC → **Warning + likely failure**
+- **With auto-adjustment**: Same scenarios with `EASY_DCA_AUTO_ADJUST_MIN_ORDER=true` → **Order adjusted to 0.00005 BTC**
+
+**Recommendation**: Use auto-adjustment only if you're comfortable spending more than your configured amount when BTC prices are high.
+
+### Price Factor Strategy
+
+The `EASY_DCA_PRICEFACTOR` determines at what percentage of the current best sell offer (ask price) your buy orders are placed:
+
+- **Default: 0.998** (99.8% of ask price)
+- **Range: 0.95 - 0.9999** (95% - 99.99% of ask price)
+
+#### **How it works:**
+- Current ask price: €50,000
+- Price factor: 0.998
+- Your buy order: €49,900 (99.8% of ask)
+
+#### **Benefits:**
+1. **Lower fees**: Limit orders below market price make you a "maker" (liquidity provider) with typically lower trading fees
+2. **Better prices**: Bitcoin's volatility often creates opportunities to buy below current market prices
+3. **Automated patience**: Orders wait for better prices rather than buying immediately
+
+#### **Risks:**
+1. **Unfilled orders**: If price never drops to your limit, orders may never execute
+2. **Missed opportunities**: During strong uptrends, you might miss buying opportunities
+3. **Timing risk**: Attempting to time market dips can backfire
+
+#### **Recommended values:**
+- **Conservative (0.995-0.9999)**: Higher fill probability, smaller savings
+- **Balanced (0.99-0.995)**: Good balance of savings and fill probability  
+- **Aggressive (0.95-0.99)**: Higher potential savings, lower fill probability
+
+#### **Strategy considerations:**
+- **Higher frequency DCA**: Use higher price factors (0.995+) for daily/weekly buys
+- **Lower frequency DCA**: Can use lower price factors (0.95-0.99) for monthly buys
+- **Market conditions**: Consider adjusting based on volatility and trend
 
 ## Secret Management: Using Key Path Variables
 
@@ -163,7 +276,8 @@ In your `flake.nix` outputs:
               EASY_DCA_PUBLIC_KEY = "your_public_key";
               EASY_DCA_PRIVATE_KEY = "your_private_key";
               EASY_DCA_PRICEFACTOR = "0.998";
-              EASY_DCA_MONTHLY_VOLUME = "140.0";
+              EASY_DCA_MONTHLY_FIAT_SPENDING = "140.0";
+              EASY_DCA_SCHEDULER_MODE = "systemd";
               NOTIFY_METHOD = "ntfy";
               NOTIFY_NTFY_TOPIC = "yourtopic";
               EASY_DCA_DRY_RUN = "true"; # Only validate orders (default)
@@ -237,3 +351,30 @@ cp examples/private.key.example examples/private.key
 This project was developed with the assistance of large language model (LLM) coding agents. Automated code suggestions, refactoring, and documentation were generated and reviewed as part of the development process. Please review and audit the code for your own use case and security requirements. 
 
 > **Note:** For ntfy notifications, both `NOTIFY_NTFY_TOPIC` and `NOTIFY_NTFY_URL` must be set. If `NOTIFY_NTFY_URL` is missing, notifications will be disabled and a warning will be logged.
+
+### Scheduler Modes
+
+The app supports different scheduling modes for different deployment scenarios:
+
+1. **`manual` (default when no cron)**: Run once and exit - perfect for systemd timers, Docker one-shot containers, or manual execution
+2. **`cron` (default when EASY_DCA_CRON is set)**: Use internal cron scheduling - good for standalone deployments or Docker containers that need to run continuously
+3. **`systemd`**: Optimized for systemd timer integration - runs once and exits, letting systemd handle the scheduling
+
+**When to use each mode:**
+
+- **`manual`**: NixOS systemd timers, Kubernetes CronJobs, manual execution, CI/CD pipelines
+- **`cron`**: Docker containers running continuously, standalone servers, when you want the app to handle its own scheduling
+- **`systemd`**: NixOS systemd timers (explicit mode), when you want to be explicit about systemd integration
+
+**Examples:**
+```bash
+# Manual mode (runs once)
+EASY_DCA_SCHEDULER_MODE=manual
+
+# Cron mode (internal scheduling)
+EASY_DCA_SCHEDULER_MODE=cron
+EASY_DCA_CRON="0 8 * * *"
+
+# Systemd mode (for systemd timers)
+EASY_DCA_SCHEDULER_MODE=systemd
+```

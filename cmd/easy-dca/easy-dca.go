@@ -1,4 +1,12 @@
 // Command easy-dca is the entrypoint for the DCA trading application using the Kraken API.
+//
+// ⚠️  DISCLAIMER: This software is provided "AS IS" without any warranties.
+// Trading cryptocurrencies involves substantial risk of loss. You can lose some or all
+// of your invested capital. The maintainers take NO responsibility for financial losses,
+// API failures, software bugs, or any other damages. USE AT YOUR OWN RISK.
+// ONLY TRADE WITH MONEY YOU CAN AFFORD TO LOSE.
+//
+// See LICENSE file for full legal terms and conditions.
 package main
 
 import (
@@ -6,141 +14,26 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/joho/godotenv"
-	"github.com/robfig/cron/v3"
-	"github.com/mayrf/easy-dca/internal/kraken"
 	"github.com/mayrf/easy-dca/internal/config"
+	"github.com/mayrf/easy-dca/internal/dca"
+	"github.com/mayrf/easy-dca/internal/notifications"
+	"github.com/mayrf/easy-dca/internal/scheduler"
 )
 
 var Version = "dev"
 
-// Notifier is an interface for sending notifications.
-type Notifier interface {
-	Notify(ctx context.Context, subject, message string) error
-}
-
-// NtfyNotifier sends notifications via ntfy.sh or a custom ntfy server.
-type NtfyNotifier struct {
-	Topic string
-	URL   string
-}
-
-func (n *NtfyNotifier) Notify(ctx context.Context, subject, message string) error {
-	if n.Topic == "" {
-		return fmt.Errorf("ntfy topic is not set")
-	}
-	if n.URL == "" {
-		return fmt.Errorf("ntfy URL is not set")
-	}
-	ntfyURL := fmt.Sprintf("%s/%s", strings.TrimRight(n.URL, "/"), n.Topic)
-	req, err := http.NewRequestWithContext(ctx, "POST", ntfyURL, strings.NewReader(message))
-	if err != nil {
-		return err
-	}
-	if subject != "" {
-		req.Header.Set("Title", subject)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("ntfy notification failed: %s", resp.Status)
-	}
-	return nil
-}
-
-// getNotifier returns a Notifier based on config.
-func getNotifier(cfg config.Config) Notifier {
-	switch strings.ToLower(cfg.NotifyMethod) {
-	case "ntfy":
-		if cfg.NotifyNtfyURL == "" {
-			log.Print("Warning: NOTIFY_NTFY_URL is required for ntfy notifications but is not set. Notifications will be disabled.")
-			return nil
-		}
-		return &NtfyNotifier{Topic: cfg.NotifyNtfyTopic, URL: cfg.NotifyNtfyURL}
-	// Add more cases for other notification methods (slack, email, etc.)
-	default:
-		return nil
-	}
-}
-
-// runDCA performs one DCA cycle and sends a notification if configured.
-func runDCA(cfg config.Config, notifier Notifier) {
-	log.Printf("Fetching orders for %s", cfg.Pair)
-	response, err := kraken.GetOrderBook(cfg.Pair, 10)
-	if err != nil {
-		log.Printf("Failed to fetch order book: %v", err)
-		if notifier != nil {
-			if err := notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to fetch order book: %v", err)); err != nil {
-				log.Printf("Failed to send notification: %v", err)
-			}
-		}
-		return
-	}
-	orderBook := response.Result[cfg.Pair]
-	log.Printf("Best Ask: Price=%.2f, Volume=%.3f\n",
-		orderBook.Asks[0].Price, orderBook.Asks[0].Volume)
-
-	log.Printf("Best Bid: Price=%.2f, Volume=%.3f\n",
-		orderBook.Bids[0].Price, orderBook.Bids[0].Volume)
-
-	buyPrice := cfg.PriceFactor * float32(orderBook.Asks[0].Price)
-	buyVolume := cfg.DailyVolume / buyPrice
-	if buyVolume < 0.00005 {
-		log.Printf("Order volume of %.8f BTC is too small. Miminum is 0.00005 BTC", buyVolume)
-		log.Printf("Setting order volume to 0.00005 BTC")
-		buyVolume = 0.00005
-	}
-	log.Printf("Ordering price factor: %.4f, Ordering Price: %.2f", cfg.PriceFactor, buyPrice)
-	log.Printf("Ordering %.8f BTC at a price of %.2f for a total of %.2f Euro", buyVolume, buyPrice, buyPrice*buyVolume)
-	if cfg.DryRun {
-		log.Printf("Dry run mode: order will only be validated, not executed.")
-	}
-	orderResponse, err := kraken.AddOrder(cfg.Pair, float32(buyPrice), float32(buyVolume), cfg.PublicKey, cfg.PrivateKey, cfg.DryRun)
-	if err != nil {
-		log.Printf("Failed to add order: %v", err)
-		if notifier != nil {
-			if err := notifier.Notify(context.Background(), "DCA Error", fmt.Sprintf("Failed to add order: %v", err)); err != nil {
-				log.Printf("Failed to send notification: %v", err)
-			}
-		}
-		return
-	}
-	
-	// Log the formatted order response
-	log.Print(kraken.FormatOrderResponse(orderResponse, cfg.DryRun))
-	
-	// Create notification message with order details
-	var msg string
-	if cfg.DryRun {
-		msg = fmt.Sprintf("DRY RUN: Validated order for %.8f BTC at %.2f EUR (total %.2f EUR)", buyVolume, buyPrice, buyPrice*buyVolume)
-	} else {
-		if len(orderResponse.Result.Txid) > 0 {
-			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f EUR (total %.2f EUR) | TXID: %s", 
-				buyVolume, buyPrice, buyPrice*buyVolume, orderResponse.Result.Txid[0])
-		} else {
-			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f EUR (total %.2f EUR)", 
-				buyVolume, buyPrice, buyPrice*buyVolume)
-		}
-	}
-	
-	if notifier != nil {
-		err := notifier.Notify(context.Background(), "DCA Success", msg)
-		if err != nil {
-			log.Printf("Failed to send notification: %v", err)
-		}
-	}
-}
-
 // main is the entrypoint for the easy-dca CLI application.
 func main() {
 	versionFlag := flag.Bool("version", false, "Print version and exit")
+	cronFlag := flag.String("cron", "", "Cron expression for scheduling (overrides EASY_DCA_CRON)")
 	flag.Parse()
+	
 	if *versionFlag {
 		fmt.Println("easy-dca version:", Version)
 		return
@@ -163,33 +56,48 @@ func main() {
 		}
 	}
 
-	cronFlag := flag.String("cron", "", "Cron expression for scheduling (overrides EASY_DCA_CRON)")
-	flag.Parse()
-
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
-		return
+		os.Exit(1)
 	}
 
 	// CLI flag overrides env
-	cronExpr := *cronFlag
-	if cronExpr == "" {
-		cronExpr = cfg.CronExpr
+	if *cronFlag != "" {
+		cfg.CronExpr = *cronFlag
 	}
 
-	notifier := getNotifier(cfg)
+	// Create notifier
+	notifier := notifications.CreateNotifier(cfg)
 
-	if cronExpr != "" {
-		c := cron.New()
-		_, err := c.AddFunc(cronExpr, func() { runDCA(cfg, notifier) })
-		if err != nil {
-			log.Fatalf("Invalid cron expression: %v", err)
-		}
-		log.Printf("Running in cron mode: %s", cronExpr)
-		c.Start()
-		select {} // Block forever
-	} else {
-		runDCA(cfg, notifier)
+	// Create DCA runner
+	runner := dca.NewRunner(cfg, notifier)
+
+	// Create scheduler
+	sched, err := scheduler.CreateScheduler(runner, cfg)
+	if err != nil {
+		log.Fatalf("Failed to create scheduler: %v", err)
 	}
+
+	// Set up context with cancellation for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		log.Print("Received shutdown signal, stopping scheduler...")
+		cancel()
+	}()
+
+	// Start the scheduler
+	log.Printf("Starting easy-dca with configuration: %s", cfg.Pair)
+	if err := sched.Start(ctx); err != nil {
+		log.Printf("Scheduler error: %v", err)
+		os.Exit(1)
+	}
+
+	log.Print("easy-dca stopped")
 }
