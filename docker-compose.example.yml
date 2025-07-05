@@ -26,6 +26,6 @@ services:
 
 secrets:
   kraken-public-key:
-    file: ./examples/public.key.example
+    file: ./examples/public.key
   kraken-private-key:
-    file: ./examples/private.key.example 
+    file: ./examples/private.key

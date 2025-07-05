@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -13,20 +14,20 @@ import (
 
 // Config holds all configuration values for the application.
 type Config struct {
-	PublicKey    string // Kraken API public key
-	PrivateKey   string // Kraken API private key
-	Pair         string // Trading pair, e.g., BTC/EUR
-	DryRun       bool   // If true, only validate orders (dry run); if false, actually place orders
-	PriceFactor  float32 // Price factor for limit orders
+	PublicKey           string  // Kraken API public key
+	PrivateKey          string  // Kraken API private key
+	Pair                string  // Trading pair, e.g., BTC/EUR
+	DryRun              bool    // If true, only validate orders (dry run); if false, actually place orders
+	PriceFactor         float32 // Price factor for limit orders
 	MonthlyFiatSpending float32 // Monthly fiat spending (optional, used if FiatAmountPerBuy is not set)
-	FiatAmountPerBuy  float32 // Fixed fiat amount to spend each run (optional, takes precedence over MonthlyFiatSpending)
-	AutoAdjustMinOrder bool // If true, automatically adjust orders below minimum size; if false, let them fail
-	SchedulerMode string // Scheduler mode: "cron", "systemd", or "manual" (default: "cron" if EASY_DCA_CRON is set, otherwise "manual")
+	FiatAmountPerBuy    float32 // Fixed fiat amount to spend each run (optional, takes precedence over MonthlyFiatSpending)
+	AutoAdjustMinOrder  bool    // If true, automatically adjust orders below minimum size; if false, let them fail
+	SchedulerMode       string  // Scheduler mode: "cron", "systemd", or "manual" (default: "cron" if EASY_DCA_CRON is set, otherwise "manual")
 
-	CronExpr      string // Cron expression for scheduling (optional)
-	BuysPerMonth  int    // Number of buys per month (calculated from cron expression)
+	CronExpr     string // Cron expression for scheduling (optional)
+	BuysPerMonth int    // Number of buys per month (calculated from cron expression)
 
-	NotifyMethod  string // Notification method (ntfy, slack, email, etc.)
+	NotifyMethod    string // Notification method (ntfy, slack, email, etc.)
 	NotifyNtfyTopic string // ntfy topic (if using ntfy)
 	NotifyNtfyURL   string // ntfy server URL (if using ntfy)
 	// Add more fields for other notification methods as needed
@@ -73,7 +74,7 @@ func calculateBuysPerMonth(cronExpr string) (int, error) {
 	// Calculate runs for the next 31 days (to cover a full month)
 	now := time.Now()
 	endDate := now.AddDate(0, 0, 31)
-	
+
 	var runCount int
 	next := schedule.Next(now)
 	for next.Before(endDate) {
@@ -110,7 +111,7 @@ func LoadConfig() (Config, error) {
 			return cfg, fmt.Errorf("No PUBLIC_KEY found, neither via EASY_DCA_PUBLIC_KEY_PATH nor EASY_DCA_PUBLIC_KEY")
 		}
 	}
-	cfg.PublicKey = publicKey
+	cfg.PublicKey = strings.TrimSpace(publicKey)
 
 	privateKey, err := loadFileToString(os.Getenv("EASY_DCA_PRIVATE_KEY_PATH"))
 	if err != nil {
@@ -119,7 +120,7 @@ func LoadConfig() (Config, error) {
 			return cfg, fmt.Errorf("No PRIVATE_KEY found, neither via EASY_DCA_PRIVATE_KEY_PATH nor EASY_DCA_PRIVATE_KEY")
 		}
 	}
-	cfg.PrivateKey = privateKey
+	cfg.PrivateKey = strings.TrimSpace(privateKey)
 
 	// 2. Load basic configuration
 	cfg.DryRun = getEnvAsBool("EASY_DCA_DRY_RUN", true)
@@ -170,4 +171,4 @@ func LoadConfig() (Config, error) {
 	// Add more notification config as needed
 
 	return cfg, nil
-} 
+}
