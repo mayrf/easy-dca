@@ -1,0 +1,23 @@
+services:
+  easy-dca:
+    build: .
+    image: easy-dca:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    secrets:
+      - kraken-public-key
+      - kraken-private-key
+    environment:
+      # Use Docker secrets for API keys (recommended for production)
+      EASY_DCA_PUBLIC_KEY_PATH: "/run/secrets/kraken-public-key"
+      EASY_DCA_PRIVATE_KEY_PATH: "/run/secrets/kraken-private-key"
+      
+      # Override scheduler mode for Docker (continuous operation)
+      EASY_DCA_SCHEDULER_MODE: "cron"
+
+secrets:
+  kraken-public-key:
+    file: ./examples/public.key
+  kraken-private-key:
+    file: ./examples/private.key 

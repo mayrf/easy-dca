@@ -33,6 +33,98 @@ type Config struct {
 	// Add more fields for other notification methods as needed
 }
 
+// configureLogging sets up the log format based on environment variables
+func configureLogging() {
+	logFormat := os.Getenv("EASY_DCA_LOG_FORMAT")
+	
+	switch strings.ToLower(logFormat) {
+	case "timestamp", "time":
+		// Standard timestamp format (2006/01/02 15:04:05)
+		log.SetFlags(log.Ldate | log.Ltime)
+	case "microseconds", "micro":
+		// Full datetime with microseconds (2006/01/02 15:04:05.000000)
+		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+	default:
+		// Default: no timestamp prefix
+		log.SetFlags(0)
+	}
+}
+
+// logConfiguration prints a user-friendly summary of the loaded configuration
+func logConfiguration(cfg Config) {
+	log.Print("=== easy-dca Configuration Summary ===")
+	
+	// Trading pair
+	log.Printf("📊 Trading pair: %s", cfg.Pair)
+	
+	// Execution mode
+	if cfg.DryRun {
+		log.Print("🔍 DRY RUN MODE: Orders will be validated but not executed")
+	} else {
+		log.Print("🚀 LIVE TRADING MODE: Orders will be placed on Kraken")
+	}
+	
+	// Buy amount configuration
+	if cfg.FiatAmountPerBuy > 0 {
+		log.Printf("💰 Fixed amount per buy: %.2f EUR", cfg.FiatAmountPerBuy)
+	} else if cfg.MonthlyFiatSpending > 0 {
+		log.Printf("💰 Monthly budget: %.2f EUR (%.2f EUR per buy, %d buys/month)", 
+			cfg.MonthlyFiatSpending, cfg.MonthlyFiatSpending/float32(cfg.BuysPerMonth), cfg.BuysPerMonth)
+	}
+	
+	// Price factor explanation
+	log.Printf("📈 Price factor: %.4f (%.2f%% of ask price)", cfg.PriceFactor, cfg.PriceFactor*100)
+	if cfg.PriceFactor >= 0.999 {
+		log.Print("   → Very conservative: High fill probability, minimal savings")
+	} else if cfg.PriceFactor >= 0.995 {
+		log.Print("   → Conservative: Good fill probability, small savings")
+	} else if cfg.PriceFactor >= 0.99 {
+		log.Print("   → Balanced: Moderate fill probability, good savings")
+	} else {
+		log.Print("   → Aggressive: Lower fill probability, higher potential savings")
+	}
+	
+	// Scheduling
+	if cfg.SchedulerMode == "systemd" {
+		log.Print("⏰ Schedule: Managed by systemd timer")
+	} else if cfg.CronExpr != "" {
+		log.Printf("⏰ Schedule: %s (%s mode)", cfg.CronExpr, cfg.SchedulerMode)
+	} else {
+		log.Printf("⏰ Schedule: Run once (%s mode)", cfg.SchedulerMode)
+	}
+	
+	// Order behavior
+	if cfg.AutoAdjustMinOrder {
+		log.Print("🔧 Auto-adjustment: Enabled (orders below minimum will be increased)")
+	} else {
+		log.Print("🔧 Auto-adjustment: Disabled (orders below minimum may fail)")
+	}
+	
+	// Notifications
+	if cfg.NotifyMethod != "" {
+		log.Printf("🔔 Notifications: %s", cfg.NotifyMethod)
+		if cfg.NotifyMethod == "ntfy" {
+			if cfg.NotifyNtfyURL != "" {
+				log.Printf("   → ntfy server: %s", cfg.NotifyNtfyURL)
+			}
+			if cfg.NotifyNtfyTopic != "" {
+				log.Printf("   → ntfy topic: %s", cfg.NotifyNtfyTopic)
+			}
+		}
+	} else {
+		log.Print("🔔 Notifications: Disabled")
+	}
+	
+	// API key source
+	if os.Getenv("EASY_DCA_PUBLIC_KEY_PATH") != "" {
+		log.Print("🔑 API keys: Loaded from file paths (secure)")
+	} else {
+		log.Print("🔑 API keys: Loaded from environment variables")
+	}
+	
+	log.Print("=====================================")
+}
+
 func getEnvAsFloat32(key string, defaultValue float32) float32 {
 	if value := os.Getenv(key); value != "" {
 		if floatValue, err := strconv.ParseFloat(value, 32); err == nil {
@@ -100,6 +192,9 @@ func calculateBuysPerMonth(cronExpr string) (int, error) {
 // LoadConfig loads configuration from environment variables and files, validates it, and returns a Config struct.
 // Returns an error if required configuration is missing or invalid.
 func LoadConfig() (Config, error) {
+	// Configure logging format first, before any log statements
+	configureLogging()
+	
 	var cfg Config
 	cfg.Pair = "BTC/EUR"
 
@@ -169,6 +264,8 @@ func LoadConfig() (Config, error) {
 	cfg.NotifyNtfyTopic = os.Getenv("NOTIFY_NTFY_TOPIC")
 	cfg.NotifyNtfyURL = os.Getenv("NOTIFY_NTFY_URL")
 	// Add more notification config as needed
+
+	logConfiguration(cfg)
 
 	return cfg, nil
 }

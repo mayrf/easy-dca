@@ -39,21 +39,9 @@ func main() {
 		return
 	}
 
-	log.Print("Loading environment variables from .env file...")
 	err := godotenv.Load()
-	if err != nil {
-		// Check if the error is due to file not existing
-		if strings.Contains(err.Error(), "no such file or directory") {
-			log.Print(".env file not found (skipping, using process environment)")
-		} else {
-			log.Printf("Error loading .env file: %v (continuing with process environment)", err)
-		}
-	} else {
-		envMap, _ := godotenv.Read()
-		log.Print("Loaded variables from .env file:")
-		for key := range envMap {
-			log.Printf("- %s", key)
-		}
+	if err != nil && !strings.Contains(err.Error(), "no such file or directory") {
+		log.Printf("Error loading .env file: %v (continuing with process environment)", err)
 	}
 
 	cfg, err := config.LoadConfig()
@@ -65,6 +53,7 @@ func main() {
 	// CLI flag overrides env
 	if *cronFlag != "" {
 		cfg.CronExpr = *cronFlag
+		log.Printf("⏰ Cron expression overridden by CLI flag: %s", *cronFlag)
 	}
 
 	// Create notifier

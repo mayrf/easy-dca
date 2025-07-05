@@ -106,10 +106,78 @@
                   "Random delay before execution (e.g., '30m', '1h')";
               };
 
+              # easy-dca specific configuration options
+              publicKeyPath = mkOption {
+                type = types.path;
+                description = "Path to file containing Kraken API public key";
+                example = "/run/secrets/kraken-public-key";
+              };
+
+              privateKeyPath = mkOption {
+                type = types.path;
+                description = "Path to file containing Kraken API private key";
+                example = "/run/secrets/kraken-private-key";
+              };
+
+              priceFactor = mkOption {
+                type = types.float;
+                default = 0.998;
+                description = "Price factor for limit orders (0.95-0.9999)";
+                example = 0.998;
+              };
+
+              fiatAmountPerBuy = mkOption {
+                type = types.nullOr types.float;
+                default = null;
+                description = "Fixed fiat amount in EUR to spend each run";
+                example = 10.0;
+              };
+
+              monthlyFiatSpending = mkOption {
+                type = types.nullOr types.float;
+                default = null;
+                description = "Monthly fiat spending in EUR (used if fiatAmountPerBuy is not set)";
+                example = 300.0;
+              };
+
+              autoAdjustMinOrder = mkOption {
+                type = types.bool;
+                default = false;
+                description = "Automatically adjust orders below minimum size (0.00005 BTC)";
+              };
+
+              dryRun = mkOption {
+                type = types.bool;
+                default = true;
+                description = "Only validate orders (dry run); if false, actually place orders";
+              };
+
+              notifyMethod = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Notification method (e.g., 'ntfy')";
+                example = "ntfy";
+              };
+
+              notifyNtfyTopic = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "ntfy topic (if using ntfy)";
+                example = "your_ntfy_topic";
+              };
+
+              notifyNtfyURL = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "ntfy server URL (if using ntfy)";
+                example = "https://ntfy.sh";
+              };
+
+              # Legacy options for backward compatibility
               environment = mkOption {
                 type = types.attrsOf types.str;
                 default = { };
-                description = "Environment variables for the service";
+                description = "Additional environment variables for the service (legacy option)";
                 example = {
                   LOG_LEVEL = "info";
                   DATA_DIR = "/var/lib/myapp";
@@ -121,18 +189,6 @@
                 default = [ ];
                 description = "Additional command line arguments";
                 example = [ "--config" "/etc/myapp/config.yaml" ];
-              };
-              credentials = mkOption {
-                type = types.attrsOf types.path;
-                default = { };
-                description = ''
-                  Credentials to load as environment variables.
-                  Maps environment variable names to paths of secret files.
-                '';
-                example = {
-                  API_KEY = "/run/secrets/api-key";
-                  DATABASE_PASSWORD = "/run/secrets/db-password";
-                };
               };
             };
 
@@ -175,19 +231,34 @@
                   ProtectKernelLogs = true;
                   RestrictRealtime = true;
                   SystemCallFilter = [ "@system-service" ];
-                  LoadCredential = mapAttrsToList
-                    (envVar: secretPath: "${envVar}:${secretPath}")
-                    cfg.credentials;
-
-                  # Set environment variables that read from the loaded credentials
-                  # systemd places loaded credentials in $CREDENTIALS_DIRECTORY/<name>
-                  Environment =
-                    mapAttrsToList (envVar: _: "${envVar}=%d/${envVar}")
-                    cfg.credentials;
+                  LoadCredential = [
+                    "kraken-public-key:${cfg.publicKeyPath}"
+                    "kraken-private-key:${cfg.privateKeyPath}"
+                  ];
                 };
 
-                # Set environment variables
-                environment = cfg.environment;
+                # Set environment variables from module options
+                environment = cfg.environment // (let
+                  # Build conditional environment variables
+                  conditionalEnv = {}
+                    // (if cfg.fiatAmountPerBuy != null then { EASY_DCA_FIAT_AMOUNT_PER_BUY = toString cfg.fiatAmountPerBuy; } else {})
+                    // (if cfg.monthlyFiatSpending != null then { EASY_DCA_MONTHLY_FIAT_SPENDING = toString cfg.monthlyFiatSpending; } else {})
+                    // (if cfg.notifyMethod != null then { NOTIFY_METHOD = cfg.notifyMethod; } else {})
+                    // (if cfg.notifyNtfyTopic != null then { NOTIFY_NTFY_TOPIC = cfg.notifyNtfyTopic; } else {})
+                    // (if cfg.notifyNtfyURL != null then { NOTIFY_NTFY_URL = cfg.notifyNtfyURL; } else {});
+                in {
+                  # Required API keys (using systemd credentials)
+                  EASY_DCA_PUBLIC_KEY_PATH = "%d/kraken-public-key";
+                  EASY_DCA_PRIVATE_KEY_PATH = "%d/kraken-private-key";
+                  
+                  # Trading configuration
+                  EASY_DCA_PRICEFACTOR = toString cfg.priceFactor;
+                  EASY_DCA_DRY_RUN = toString cfg.dryRun;
+                  EASY_DCA_AUTO_ADJUST_MIN_ORDER = toString cfg.autoAdjustMinOrder;
+                  
+                  # Scheduler mode (always systemd for NixOS)
+                  EASY_DCA_SCHEDULER_MODE = "systemd";
+                } // conditionalEnv);
               };
 
               # Ensure the user exists if it's not a system user

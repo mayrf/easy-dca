@@ -53,6 +53,7 @@ cryptocurrency trading and API integration.
 - Run once or on a schedule (cron expression via CLI flag or env var)
 - Pluggable notification system (ntfy supported, extensible for others)
 - Simple configuration via environment variables
+- Enhanced startup logging that explains your configuration in plain English
 - Ready for Docker and docker-compose deployment (uses Chainguard images for security and minimal size)
 - CI/CD with GitHub Actions
 
@@ -64,17 +65,19 @@ git clone https://github.com/mayrf/easy-dca.git
 cd easy-dca
 ```
 
-### 2. Create a `.env` file
-Copy the example and fill in your values:
+### 2. Configure your environment
+Copy the example environment file and customize it:
 ```sh
 cp .env.example .env
 # Edit .env with your actual values
 ```
 
-### 3. Create a `docker-compose.yml` file
-Copy the example:
+### 3. Configure your API keys
+For Docker secrets (recommended):
 ```sh
-cp docker-compose.example.yml docker-compose.yml
+cp examples/public.key.example examples/public.key
+cp examples/private.key.example examples/private.key
+# Edit these files with your real API keys
 ```
 
 ### 4. Build and run
@@ -82,7 +85,14 @@ cp docker-compose.example.yml docker-compose.yml
 docker-compose up --build
 ```
 
+**Note:** After the first build, if you make changes to the Go code, you'll need to rebuild:
+```sh
+docker-compose up --build
+```
+
 The app will run on the schedule you set in `EASY_DCA_CRON` and send notifications via ntfy.
+
+**Tip:** When the application starts, it will display a comprehensive summary of your configuration, explaining what each setting does in plain English.
 
 ## Quick Start (Local Development)
 
@@ -92,7 +102,7 @@ git clone https://github.com/mayrf/easy-dca.git
 cd easy-dca
 ```
 
-### 2. Create a `.env` file
+### 2. Configure your environment
 ```sh
 cp .env.example .env
 # Edit .env with your actual values
@@ -100,7 +110,7 @@ cp .env.example .env
 
 ### 3. Run the application
 ```sh
-# Run once
+# Run once (manual mode)
 ./scripts/test-once.sh
 
 # Run with cron (set EASY_DCA_CRON in .env)
@@ -110,9 +120,19 @@ cp .env.example .env
 ./scripts/test-cron-flag.sh
 ```
 
+**Tip:** When the application starts, it will display a comprehensive summary of your configuration, explaining what each setting does in plain English.
+
 ## Environment Variables
 - `EASY_DCA_PUBLIC_KEY`: Kraken API public key (**required**)
 - `EASY_DCA_PRIVATE_KEY`: Kraken API private key (**required**)
+
+**Getting Kraken API Keys:**
+- [How to Create a Kraken API Key](https://support.kraken.com/articles/360000919966-how-to-create-an-api-key)
+- [Kraken API Documentation](https://docs.kraken.com/api/docs/rest-api/add-order)
+
+**Required API Permissions:** `Orders and trades - Create & modify orders`
+
+**Pro Tip:** If you have the [Kraken Pro app](https://www.kraken.com/features/cryptocurrency-apps) installed on your phone, you'll receive a notification once your DCA order has been filled!
 - `EASY_DCA_PRICEFACTOR`: Price factor for limit orders (default: 0.998)
 - `EASY_DCA_MONTHLY_FIAT_SPENDING`: Monthly fiat spending in EUR (optional, used if EASY_DCA_FIAT_AMOUNT_PER_BUY is not set)
 - `EASY_DCA_FIAT_AMOUNT_PER_BUY`: Fixed fiat amount in EUR to spend each run (optional, takes precedence over EASY_DCA_MONTHLY_FIAT_SPENDING)
@@ -123,6 +143,10 @@ cp .env.example .env
 - `NOTIFY_NTFY_TOPIC`: ntfy topic (if using ntfy)
 - `NOTIFY_NTFY_URL`: ntfy server URL (**required for ntfy notifications**; no default)
 - `EASY_DCA_DRY_RUN`: If true (default), only validate orders (dry run); if false, actually place orders.
+- `EASY_DCA_LOG_FORMAT`: Log format control (default: no timestamp)
+  - `"timestamp"` or `"time"`: Standard format (2006/01/02 15:04:05)
+  - `"microseconds"` or `"micro"`: Full datetime with microseconds (2006/01/02 15:04:05.000000)
+  - Any other value or unset: No timestamp prefix
 
 ### Buy Amount Configuration
 
@@ -272,21 +296,27 @@ In your `flake.nix` outputs:
             schedule = "*-*-* 08:00:00";
             user = "easy-dca";
             group = "easy-dca";
-            environment = {
-              EASY_DCA_PUBLIC_KEY = "your_public_key";
-              EASY_DCA_PRIVATE_KEY = "your_private_key";
-              EASY_DCA_PRICEFACTOR = "0.998";
-              EASY_DCA_MONTHLY_FIAT_SPENDING = "140.0";
-              EASY_DCA_SCHEDULER_MODE = "systemd";
-              NOTIFY_METHOD = "ntfy";
-              NOTIFY_NTFY_TOPIC = "yourtopic";
-              EASY_DCA_DRY_RUN = "true"; # Only validate orders (default)
-              # EASY_DCA_DRY_RUN = "false"; # Actually place orders
-              # NOTIFY_NTFY_URL = "https://ntfy.sh"; # Optional
-            };
-            # credentials = {
-            #   API_KEY = "/run/secrets/api-key";
-            # };
+            
+            # Required API keys (using systemd credentials)
+            publicKeyPath = "/run/secrets/kraken-public-key";
+            privateKeyPath = "/run/secrets/kraken-private-key";
+            
+            # Trading configuration
+            priceFactor = 0.998;
+            dryRun = true; # Only validate orders (default)
+            # dryRun = false; # Actually place orders
+            autoAdjustMinOrder = false;
+            
+            # Buy amount configuration (choose one)
+            fiatAmountPerBuy = 10.0; # Fixed amount per buy
+            # monthlyFiatSpending = 300.0; # Monthly budget (alternative)
+            
+            # Notification configuration (optional)
+            notifyMethod = "ntfy";
+            notifyNtfyTopic = "yourtopic";
+            notifyNtfyURL = "https://ntfy.sh";
+            
+            # Additional options
             # extraArgs = [ ];
           };
         })
@@ -294,6 +324,28 @@ In your `flake.nix` outputs:
     };
   };
 }
+```
+
+**Note:** The `publicKeyPath` and `privateKeyPath` options should point to files containing your actual API keys. The module automatically loads these files as systemd credentials and makes them available to the application at runtime. You can use NixOS secrets management or place the key files in a secure location.
+
+**Example with NixOS secrets:**
+```nix
+services.easy-dca = {
+  enable = true;
+  publicKeyPath = "/run/secrets/kraken-public-key";
+  privateKeyPath = "/run/secrets/kraken-private-key";
+  # ... other options
+};
+
+# Set up the secrets
+sops.secrets = {
+  "kraken-public-key" = {
+    path = "/run/secrets/kraken-public-key";
+  };
+  "kraken-private-key" = {
+    path = "/run/secrets/kraken-private-key";
+  };
+};
 ```
 
 ### 3. Rebuild and Switch
@@ -305,11 +357,23 @@ sudo nixos-rebuild switch --flake .#myhost
 - `enable`: Enable the timer service.
 - `schedule`: Systemd calendar expression (see `man systemd.time`).
 - `user`/`group`: User/group to run as (created if not present).
-- `environment`: Environment variables for the app.
-- `credentials`: Map env vars to secret file paths (securely loaded).
-- `extraArgs`: Additional CLI arguments for the app.
 - `persistent`: Run missed events after startup (default: true).
 - `randomizedDelaySec`: Add random delay to timer (default: 0).
+
+**easy-dca Configuration Options:**
+- `publicKeyPath`/`privateKeyPath`: Paths to files containing Kraken API keys (**required**).
+- `priceFactor`: Price factor for limit orders (default: 0.998).
+- `fiatAmountPerBuy`: Fixed fiat amount per buy in EUR (optional).
+- `monthlyFiatSpending`: Monthly fiat spending in EUR (optional, used if fiatAmountPerBuy is not set).
+- `autoAdjustMinOrder`: Auto-adjust orders below minimum size (default: false).
+- `dryRun`: Only validate orders (default: true).
+- `notifyMethod`: Notification method (e.g., "ntfy").
+- `notifyNtfyTopic`: ntfy topic (if using ntfy).
+- `notifyNtfyURL`: ntfy server URL (if using ntfy).
+
+**Legacy Options:**
+- `environment`: Additional environment variables (legacy option).
+- `extraArgs`: Additional command line arguments.
 
 ### Security
 The service runs with strong systemd hardening by default (see flake.nix for details).
@@ -320,7 +384,7 @@ Please see the LICENSE file for details.
 ## Example Config Files
 
 - `.env.example`: Template for environment variables. Copy to `.env` and fill in your values.
-- `docker-compose.example.yml`: Reference Compose file showing best practices for secrets and env config.
+- `docker-compose.yml`: Docker Compose configuration with default settings for production deployment.
 - `examples/public.key.example`, `examples/private.key.example`: Example key files for use with Docker secrets or NixOS credentials. Replace with your real keys in production.
 - `scripts/`: Utility scripts for running the application in different modes.
 
@@ -331,15 +395,12 @@ Please see the LICENSE file for details.
 cp .env.example .env
 # Edit .env with your real values
 
-# 2. For Docker Compose (optional)
-cp docker-compose.example.yml docker-compose.yml
-
-# 3. For Docker secrets (optional)
+# 2. For Docker secrets (optional)
 cp examples/public.key.example examples/public.key
 cp examples/private.key.example examples/private.key
 # Edit these files with your real API keys
 
-# 4. Run the application
+# 3. Run the application
 ./scripts/test-once.sh  # Run once
 ./scripts/test-cron.sh  # Run with cron (set EASY_DCA_CRON in .env)
 ```
