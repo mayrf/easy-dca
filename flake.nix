@@ -17,7 +17,7 @@
 
           src = ./.;
 
-          vendorHash = "sha256-NHTKwUSIbNCUco88JbHOo3gt6S37ggee+LWNbHaRGEs=";
+          vendorHash = "sha256-QFHoPpewvzRqsk1XhsheKScl5pOQR3RU0ZYGkTedY8s=";
           subPackages = [ "cmd/easy-dca" ];
 
           # Optional: specify Go version if needed
