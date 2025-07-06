@@ -78,7 +78,16 @@ cp examples/private.key.example examples/private.key
 # Edit these files with your real API keys
 ```
 
-### 4. Build and run
+### 3. Build and run with scripts
+```sh
+# Run once (manual mode)
+./scripts/test-once.sh
+
+# Run with cron flag
+./scripts/test-cron-flag.sh
+```
+
+### 4. Build and run with docker compose
 ```sh
 docker-compose up
 ```
@@ -89,31 +98,6 @@ docker-compose up --build
 ```
 
 The app will run on the schedule you set in `EASY_DCA_CRON` and send notifications via ntfy.
-
-**Tip:** When the application starts, it will display a comprehensive summary of your configuration, explaining what each setting does in plain English.
-
-## Quick Start (Local Development)
-
-### 1. Clone the repository
-```sh
-git clone https://github.com/mayrf/easy-dca.git
-cd easy-dca
-```
-
-### 2. Configure your environment
-```sh
-cp .env.example .env
-# Edit .env with your actual values
-```
-
-### 3. Run the application
-```sh
-# Run once (manual mode)
-./scripts/test-once.sh
-
-# Run with cron flag
-./scripts/test-cron-flag.sh
-```
 
 **Tip:** When the application starts, it will display a comprehensive summary of your configuration, explaining what each setting does in plain English.
 
