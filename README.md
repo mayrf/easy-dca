@@ -112,7 +112,7 @@ The app will run on the schedule you set in `EASY_DCA_CRON` and send notificatio
 **Required API Permissions:** `Orders and trades - Create & modify orders`
 
 **Pro Tip:** If you have the [Kraken Pro app](https://www.kraken.com/features/cryptocurrency-apps) installed on your phone, you'll receive a notification once your DCA order has been filled!
-- `EASY_DCA_PRICEFACTOR`: Price factor for limit orders (default: 0.998)
+- `EASY_DCA_PRICE_FACTOR`: Price factor for limit orders (default: 0.998)
 - `EASY_DCA_MONTHLY_FIAT_SPENDING`: Monthly fiat spending in EUR (optional, used if EASY_DCA_FIAT_AMOUNT_PER_BUY is not set)
 - `EASY_DCA_FIAT_AMOUNT_PER_BUY`: Fixed fiat amount in EUR to spend each run (optional, takes precedence over EASY_DCA_MONTHLY_FIAT_SPENDING)
 - `EASY_DCA_CRON`: Cron expression for scheduling (optional; if not set, runs once)
@@ -160,7 +160,7 @@ Kraken has a minimum order size of 0.00005 BTC. The app handles this in two ways
 
 ### Price Factor Strategy
 
-The `EASY_DCA_PRICEFACTOR` determines at what percentage of the current best sell offer (ask price) your buy orders are placed:
+The `EASY_DCA_PRICE_FACTOR` determines at what percentage of the current best sell offer (ask price) your buy orders are placed:
 
 - **Default: 0.998** (99.8% of ask price)
 - **Range: 0.95 - 0.9999** (95% - 99.99% of ask price)

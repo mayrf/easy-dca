@@ -134,6 +134,13 @@ func getEnvAsFloat32(key string, defaultValue float32) float32 {
 	return defaultValue
 }
 
+func getEnvAsString(key string, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 func getEnvAsBool(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		if boolValue, err := strconv.ParseBool(value); err == nil {
@@ -192,9 +199,6 @@ func calculateBuysPerMonth(cronExpr string) (int, error) {
 // LoadConfig loads configuration from environment variables and files, validates it, and returns a Config struct.
 // Returns an error if required configuration is missing or invalid.
 func LoadConfig() (Config, error) {
-	// Configure logging format first, before any log statements
-	configureLogging()
-	
 	var cfg Config
 	cfg.Pair = "BTC/EUR"
 
@@ -218,8 +222,10 @@ func LoadConfig() (Config, error) {
 	cfg.PrivateKey = strings.TrimSpace(privateKey)
 
 	// 2. Load basic configuration
+
+	cfg.Pair = getEnvAsString("EASY_DCA_PAIR","BTC/EUR")
 	cfg.DryRun = getEnvAsBool("EASY_DCA_DRY_RUN", true)
-	cfg.PriceFactor = getEnvAsFloat32("EASY_DCA_PRICEFACTOR", 0.998)
+	cfg.PriceFactor = getEnvAsFloat32("EASY_DCA_PRICE_FACTOR", 0.998)
 	cfg.MonthlyFiatSpending = getEnvAsFloat32("EASY_DCA_MONTHLY_FIAT_SPENDING", 0.0)
 	cfg.FiatAmountPerBuy = getEnvAsFloat32("EASY_DCA_FIAT_AMOUNT_PER_BUY", 0.0)
 	cfg.AutoAdjustMinOrder = getEnvAsBool("EASY_DCA_AUTO_ADJUST_MIN_ORDER", false)

@@ -8,7 +8,7 @@ func TestLoadConfig_Success(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_DRY_RUN", "false")
-	t.Setenv("EASY_DCA_PRICEFACTOR", "0.95")
+	t.Setenv("EASY_DCA_PRICE_FACTOR", "0.95")
 	t.Setenv("EASY_DCA_MONTHLY_FIAT_SPENDING", "60.0")
 
 	cfg, err := LoadConfig()
@@ -62,7 +62,7 @@ func TestLoadConfig_PriceFactorAtMax(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
-	t.Setenv("EASY_DCA_PRICEFACTOR", "0.9999")
+	t.Setenv("EASY_DCA_PRICE_FACTOR", "0.9999")
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("expected no error for price factor at maximum (0.9999), got %v", err)
@@ -76,7 +76,7 @@ func TestLoadConfig_PriceFactorAboveMax(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
-	t.Setenv("EASY_DCA_PRICEFACTOR", "1.0")
+	t.Setenv("EASY_DCA_PRICE_FACTOR", "1.0")
 	_, err := LoadConfig()
 	if err == nil {
 		t.Fatal("expected error for price factor above maximum (1.0), got nil")
@@ -87,7 +87,7 @@ func TestLoadConfig_PriceFactorJustBelowMax(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
-	t.Setenv("EASY_DCA_PRICEFACTOR", "0.9998")
+	t.Setenv("EASY_DCA_PRICE_FACTOR", "0.9998")
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -101,7 +101,7 @@ func TestLoadConfig_PriceFactorTooLow(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
-	t.Setenv("EASY_DCA_PRICEFACTOR", "0.94")
+	t.Setenv("EASY_DCA_PRICE_FACTOR", "0.94")
 	_, err := LoadConfig()
 	if err == nil {
 		t.Fatal("expected error for price factor too low, got nil")
@@ -112,7 +112,7 @@ func TestLoadConfig_ValidPriceFactor(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
-	t.Setenv("EASY_DCA_PRICEFACTOR", "0.97")
+	t.Setenv("EASY_DCA_PRICE_FACTOR", "0.97")
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

@@ -252,7 +252,7 @@
                   EASY_DCA_PRIVATE_KEY_PATH = "%d/kraken-private-key";
                   
                   # Trading configuration
-                  EASY_DCA_PRICEFACTOR = toString cfg.priceFactor;
+                  EASY_DCA_PRICE_FACTOR = toString cfg.priceFactor;
                   EASY_DCA_DRY_RUN = toString cfg.dryRun;
                   EASY_DCA_AUTO_ADJUST_MIN_ORDER = toString cfg.autoAdjustMinOrder;
                   
