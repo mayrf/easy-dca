@@ -55,7 +55,6 @@ cryptocurrency trading and API integration.
 - Simple configuration via environment variables
 - Enhanced startup logging that explains your configuration in plain English
 - Ready for Docker and docker-compose deployment (uses Chainguard images for security and minimal size)
-- CI/CD with GitHub Actions
 
 ## Quick Start (Docker Compose)
 
@@ -69,7 +68,6 @@ cd easy-dca
 Copy the example environment file and customize it:
 ```sh
 cp .env.example .env
-# Edit .env with your actual values
 ```
 
 ### 3. Configure your API keys
@@ -82,7 +80,7 @@ cp examples/private.key.example examples/private.key
 
 ### 4. Build and run
 ```sh
-docker-compose up --build
+docker-compose up
 ```
 
 **Note:** After the first build, if you make changes to the Go code, you'll need to rebuild:
@@ -112,9 +110,6 @@ cp .env.example .env
 ```sh
 # Run once (manual mode)
 ./scripts/test-once.sh
-
-# Run with cron (set EASY_DCA_CRON in .env)
-./scripts/test-cron.sh
 
 # Run with cron flag
 ./scripts/test-cron-flag.sh
