@@ -69,6 +69,32 @@
             # Get the Go application from the flake
             easy-dca-app = self.packages.${pkgs.system}.easy-dca;
 
+            # Helper: Convert cron to OnCalendar (simple cases only)
+            cronToOnCalendar = cronExpr: let
+              parts = builtins.match "([0-9*]+) ([0-9*]+) ([0-9*]+) ([0-9*]+) ([0-9*]+)" cronExpr;
+            in if parts == null then
+              throw "Invalid cron expression: ${cronExpr}"
+            else
+              let
+                minute = builtins.elemAt parts 0;
+                hour = builtins.elemAt parts 1;
+                day = builtins.elemAt parts 2;
+                month = builtins.elemAt parts 3;
+                weekday = builtins.elemAt parts 4;
+                # Only support simple daily/weekly/monthly cases for now
+                onCal =
+                  if day == "*" && month == "*" && weekday == "*" then
+                    "*-*-* ${hour}:${minute}:00"
+                  else if weekday != "*" && day == "*" && month == "*" then
+                    "*-*-* ${hour}:${minute}:00"
+                  else if day != "*" && month == "*" && weekday == "*" then
+                    "*-*-${day} ${hour}:${minute}:00"
+                  else
+                    throw "Complex cron expressions are not supported: ${cronExpr}";
+              in onCal;
+
+            onCalendar = cronToOnCalendar cfg.cronSchedule;
+
           in {
             options.services.easy-dca = {
               enable = mkEnableOption "easy-dca Timer Service";
@@ -188,31 +214,6 @@
             };
 
             config = mkIf cfg.enable {
-              # Helper: Convert cron to OnCalendar (simple cases only)
-              cronToOnCalendar = cronExpr: let
-                parts = builtins.match "([0-9*]+) ([0-9*]+) ([0-9*]+) ([0-9*]+) ([0-9*]+)" cronExpr;
-              in if parts == null then
-                throw "Invalid cron expression: ${cronExpr}"
-              else
-                let
-                  minute = builtins.elemAt parts 0;
-                  hour = builtins.elemAt parts 1;
-                  day = builtins.elemAt parts 2;
-                  month = builtins.elemAt parts 3;
-                  weekday = builtins.elemAt parts 4;
-                  # Only support simple daily/weekly/monthly cases for now
-                  onCal =
-                    if day == "*" && month == "*" && weekday == "*" then
-                      "*-*-* ${hour}:${minute}:00"
-                    else if weekday != "*" && day == "*" && month == "*" then
-                      "*-*-* ${hour}:${minute}:00"
-                    else if day != "*" && month == "*" && weekday == "*" then
-                      "*-*-${day} ${hour}:${minute}:00"
-                    else
-                      throw "Complex cron expressions are not supported: ${cronExpr}";
-                in onCal;
-              onCalendar = cronToOnCalendar cfg.cronSchedule;
-
               # Create the systemd timer
               systemd.timers."easy-dca-timer-service" = {
                 wantedBy = [ "timers.target" ];
