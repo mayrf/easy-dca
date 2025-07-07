@@ -65,12 +65,12 @@ func (r *Runner) RunDCA() error {
 	)
 	
 	if btcQuantityToBuy < warningThreshold {
-		log.Printf("Warning: Order size %.8f BTC is close to minimum (%.5f BTC)", btcQuantityToBuy, minBtcSize)
+		log.Printf("Warning: Order size %s %s is close to minimum (%.5f BTC)", r.cfg.FormatBTC(btcQuantityToBuy), r.cfg.GetBTCUnit(), minBtcSize)
 	}
 	
 	if btcQuantityToBuy < minBtcSize {
 		if r.cfg.AutoAdjustMinOrder {
-			log.Printf("Order volume of %.8f BTC is too small. Minimum is %.5f BTC", btcQuantityToBuy, minBtcSize)
+			log.Printf("Order volume of %s %s is too small. Minimum is %.5f BTC", r.cfg.FormatBTC(btcQuantityToBuy), r.cfg.GetBTCUnit(), minBtcSize)
 			log.Printf("Auto-adjusting order volume to %.5f BTC", minBtcSize)
 			btcQuantityToBuy = minBtcSize
 			// Recalculate the actual fiat amount that will be spent
@@ -79,14 +79,14 @@ func (r *Runner) RunDCA() error {
 				actualFiatAmount, r.cfg.Pair.GetFiatCurrency(), 
 				fiatAmountToSpend, r.cfg.Pair.GetFiatCurrency())
 		} else {
-			log.Printf("Order volume of %.8f BTC is below minimum (%.5f BTC) and auto-adjustment is disabled", btcQuantityToBuy, minBtcSize)
+			log.Printf("Order volume of %s %s is below minimum (%.5f BTC) and auto-adjustment is disabled", r.cfg.FormatBTC(btcQuantityToBuy), r.cfg.GetBTCUnit(), minBtcSize)
 			log.Printf("Order will likely fail, but cron job will continue running")
 		}
 	}
 	
 	log.Printf("Ordering price factor: %.4f, Ordering Price: %.2f", r.cfg.PriceFactor, buyPrice)
-	log.Printf("Ordering %.8f BTC at a price of %.2f for a total of %.2f %s", 
-		btcQuantityToBuy, buyPrice, btcQuantityToBuy*buyPrice, r.cfg.Pair.GetFiatCurrencyName())
+	log.Printf("Ordering %s %s at a price of %.2f for a total of %.2f %s", 
+		r.cfg.FormatBTC(btcQuantityToBuy), r.cfg.GetBTCUnit(), buyPrice, btcQuantityToBuy*buyPrice, r.cfg.Pair.GetFiatCurrencyName())
 	if r.cfg.DryRun {
 		log.Printf("Dry run mode: order will only be validated, not executed.")
 	}
@@ -108,17 +108,17 @@ func (r *Runner) RunDCA() error {
 	// Create notification message with order details
 	var msg string
 	if r.cfg.DryRun {
-		msg = fmt.Sprintf("DRY RUN: Validated order for %.8f BTC at %.2f %s (total %.2f %s)", 
-			btcQuantityToBuy, buyPrice, r.cfg.Pair.GetFiatCurrency(), 
+		msg = fmt.Sprintf("DRY RUN: Validated order for %s %s at %.2f %s (total %.2f %s)", 
+			r.cfg.FormatBTC(btcQuantityToBuy), r.cfg.GetBTCUnit(), buyPrice, r.cfg.Pair.GetFiatCurrency(), 
 			fiatAmountToSpend, r.cfg.Pair.GetFiatCurrency())
 	} else {
 		if len(orderResponse.Result.Txid) > 0 {
-			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f %s (total %.2f %s) | TXID: %s", 
-				btcQuantityToBuy, buyPrice, r.cfg.Pair.GetFiatCurrency(), 
+			msg = fmt.Sprintf("LIVE ORDER: Placed order for %s %s at %.2f %s (total %.2f %s) | TXID: %s", 
+				r.cfg.FormatBTC(btcQuantityToBuy), r.cfg.GetBTCUnit(), buyPrice, r.cfg.Pair.GetFiatCurrency(), 
 				fiatAmountToSpend, r.cfg.Pair.GetFiatCurrency(), orderResponse.Result.Txid[0])
 		} else {
-			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f %s (total %.2f %s)", 
-				btcQuantityToBuy, buyPrice, r.cfg.Pair.GetFiatCurrency(), 
+			msg = fmt.Sprintf("LIVE ORDER: Placed order for %s %s at %.2f %s (total %.2f %s)", 
+				r.cfg.FormatBTC(btcQuantityToBuy), r.cfg.GetBTCUnit(), buyPrice, r.cfg.Pair.GetFiatCurrency(), 
 				fiatAmountToSpend, r.cfg.Pair.GetFiatCurrency())
 		}
 	}

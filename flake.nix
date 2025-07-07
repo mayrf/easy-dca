@@ -160,6 +160,12 @@
                 description = "Only validate orders (dry run); if false, actually place orders";
               };
 
+              displaySats = mkOption {
+                type = types.bool;
+                default = false;
+                description = "Display BTC amounts in sats ";
+              };
+
               notifyMethod = mkOption {
                 type = types.nullOr types.str;
                 default = null;
@@ -262,9 +268,10 @@
                   # Trading configuration
                   EASY_DCA_PAIR = cfg.pair;
                   EASY_DCA_PRICE_FACTOR = toString cfg.priceFactor;
-                  EASY_DCA_DRY_RUN = toString cfg.dryRun;
-                  EASY_DCA_AUTO_ADJUST_MIN_ORDER = toString cfg.autoAdjustMinOrder;
-                  
+                  EASY_DCA_DRY_RUN = if cfg.dryRun then "true" else "false";
+                  EASY_DCA_AUTO_ADJUST_MIN_ORDER = if cfg.autoAdjustMinOrder then "true" else "false";
+                  EASY_DCA_DISPLAY_SATS = if cfg.displaySats then "true" else "false"; 
+
                   # Scheduler mode (always systemd for NixOS)
                   EASY_DCA_SCHEDULER_MODE = "systemd";
                 } // conditionalEnv);

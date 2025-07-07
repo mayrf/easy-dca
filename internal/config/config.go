@@ -80,6 +80,8 @@ type Config struct {
 	AutoAdjustMinOrder  bool        // If true, automatically adjust orders below minimum size; if false, let them fail
 	SchedulerMode       string      // Scheduler mode: "cron", "systemd", or "manual" (default: "cron" if EASY_DCA_CRON is set, otherwise "manual")
 
+	DisplaySats         bool        // If true, display all BTC amounts in satoshi
+
 	CronExpr     string // Cron expression for scheduling (optional)
 	BuysPerMonth int    // Number of buys per month (calculated from cron expression)
 
@@ -112,6 +114,9 @@ func logConfiguration(cfg Config) {
 	
 	// Trading pair
 	log.Printf("📊 Trading pair: %s", cfg.Pair.String())
+
+	// BTC unit
+	log.Printf("🪙  BTC unit: %s", cfg.GetBTCUnit())
 	
 	// Execution mode
 	if cfg.DryRun {
@@ -293,6 +298,7 @@ func LoadConfig() (Config, error) {
 	cfg.AutoAdjustMinOrder = getEnvAsBool("EASY_DCA_AUTO_ADJUST_MIN_ORDER", false)
 	cfg.CronExpr = os.Getenv("EASY_DCA_CRON")
 	cfg.SchedulerMode = os.Getenv("EASY_DCA_SCHEDULER_MODE")
+	cfg.DisplaySats = getEnvAsBool("EASY_DCA_DISPLAY_SATS", false)
 
 	// 3. Validate constraints immediately (fail fast)
 	if cfg.PriceFactor > 0.9999 {
@@ -336,4 +342,20 @@ func LoadConfig() (Config, error) {
 	logConfiguration(cfg)
 
 	return cfg, nil
+}
+
+// FormatBTC formats a BTC amount according to the display configuration
+func (c *Config) FormatBTC(amount float32) string {
+	if c.DisplaySats {
+		return fmt.Sprintf("%.0f", amount*100000000)
+	}
+	return fmt.Sprintf("%.8f", amount)
+}
+
+// GetBTCUnit returns the appropriate unit string for BTC amounts
+func (c *Config) GetBTCUnit() string {
+	if c.DisplaySats {
+		return "sats"
+	}
+	return "BTC"
 }

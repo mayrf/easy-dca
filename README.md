@@ -127,6 +127,7 @@ The app will run on the schedule you set in `EASY_DCA_CRON` and send notificatio
   - `"timestamp"` or `"time"`: Standard format (2006/01/02 15:04:05)
   - `"microseconds"` or `"micro"`: Full datetime with microseconds (2006/01/02 15:04:05.000000)
   - Any other value or unset: No timestamp prefix
+- `EASY_DCA_DISPLAY_SATS`: If true, display all BTC amounts in satoshi (default: false)
 
 ### Supported Trading Pairs
 
