@@ -73,12 +73,11 @@
             options.services.easy-dca = {
               enable = mkEnableOption "easy-dca Timer Service";
 
-              schedule = mkOption {
+              cronSchedule = mkOption {
                 type = types.str;
-                default = "daily";
-                description =
-                  "Systemd calendar expression for when to run the service";
-                example = "*-*-* 02:30:00";
+                default = "30 2 * * *";
+                description = "Cron expression for when to run the service (e.g., '30 2 * * *' for 2:30am daily)";
+                example = "30 2 * * *";
               };
 
               user = mkOption {
@@ -186,32 +185,39 @@
                 description = "ntfy server URL (if using ntfy)";
                 example = "https://ntfy.sh";
               };
-
-              # Legacy options for backward compatibility
-              environment = mkOption {
-                type = types.attrsOf types.str;
-                default = { };
-                description = "Additional environment variables for the service (legacy option)";
-                example = {
-                  LOG_LEVEL = "info";
-                  DATA_DIR = "/var/lib/myapp";
-                };
-              };
-
-              extraArgs = mkOption {
-                type = types.listOf types.str;
-                default = [ ];
-                description = "Additional command line arguments";
-                example = [ "--config" "/etc/myapp/config.yaml" ];
-              };
             };
 
             config = mkIf cfg.enable {
+              # Helper: Convert cron to OnCalendar (simple cases only)
+              cronToOnCalendar = cronExpr: let
+                parts = builtins.match "([0-9*]+) ([0-9*]+) ([0-9*]+) ([0-9*]+) ([0-9*]+)" cronExpr;
+              in if parts == null then
+                throw "Invalid cron expression: ${cronExpr}"
+              else
+                let
+                  minute = builtins.elemAt parts 0;
+                  hour = builtins.elemAt parts 1;
+                  day = builtins.elemAt parts 2;
+                  month = builtins.elemAt parts 3;
+                  weekday = builtins.elemAt parts 4;
+                  # Only support simple daily/weekly/monthly cases for now
+                  onCal =
+                    if day == "*" && month == "*" && weekday == "*" then
+                      "*-*-* ${hour}:${minute}:00"
+                    else if weekday != "*" && day == "*" && month == "*" then
+                      "*-*-* ${hour}:${minute}:00"
+                    else if day != "*" && month == "*" && weekday == "*" then
+                      "*-*-${day} ${hour}:${minute}:00"
+                    else
+                      throw "Complex cron expressions are not supported: ${cronExpr}";
+                in onCal;
+              onCalendar = cronToOnCalendar cfg.cronSchedule;
+
               # Create the systemd timer
               systemd.timers."easy-dca-timer-service" = {
                 wantedBy = [ "timers.target" ];
                 timerConfig = {
-                  OnCalendar = cfg.schedule;
+                  OnCalendar = onCalendar;
                   Persistent = cfg.persistent;
                   RandomizedDelaySec = cfg.randomizedDelaySec;
                 };
@@ -224,9 +230,7 @@
                   Type = "oneshot";
                   User = cfg.user;
                   Group = cfg.group;
-                  ExecStart = "${easy-dca-app}/bin/easy-dca ${
-                      concatStringsSep " " cfg.extraArgs
-                    }";
+                  ExecStart = "${easy-dca-app}/bin/easy-dca";
 
                   # Security hardening
                   NoNewPrivileges = true;
@@ -252,7 +256,7 @@
                 };
 
                 # Set environment variables from module options
-                environment = cfg.environment // (let
+                environment = (let
                   # Build conditional environment variables
                   conditionalEnv = {}
                     // (if cfg.fiatAmountPerBuy != null then { EASY_DCA_FIAT_AMOUNT_PER_BUY = toString cfg.fiatAmountPerBuy; } else {})
@@ -274,6 +278,7 @@
 
                   # Scheduler mode (always systemd for NixOS)
                   EASY_DCA_SCHEDULER_MODE = "systemd";
+                  EASY_DCA_CRON = cfg.cronSchedule;
                 } // conditionalEnv);
               };
 

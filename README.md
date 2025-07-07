@@ -55,22 +55,25 @@ cryptocurrency trading and API integration.
 - Simple configuration via environment variables
 - Enhanced startup logging that explains your configuration in plain English
 - Ready for Docker and docker-compose deployment (uses Chainguard images for security and minimal size)
+- NixOS module for secure systemd timer integration
 
-## Quick Start (Docker Compose)
+## Quick Start
 
-### 1. Clone the repository
+### Docker Compose (Recommended for most users)
+
+#### 1. Clone the repository
 ```sh
 git clone https://github.com/mayrf/easy-dca.git
 cd easy-dca
 ```
 
-### 2. Configure your environment
+#### 2. Configure your environment
 Copy the example environment file and customize it:
 ```sh
 cp .env.example .env
 ```
 
-### 3. Configure your API keys
+#### 3. Configure your API keys
 For Docker secrets (recommended):
 ```sh
 cp examples/public.key.example examples/public.key
@@ -78,17 +81,15 @@ cp examples/private.key.example examples/private.key
 # Edit these files with your real API keys
 ```
 
-### 3. Build and run with scripts
+#### 4. Build and run
 ```sh
 # Run once (manual mode)
 ./scripts/test-once.sh
 
 # Run with cron flag
 ./scripts/test-cron-flag.sh
-```
 
-### 4. Build and run with docker compose
-```sh
+# Or use docker compose
 docker-compose up
 ```
 
@@ -101,9 +102,83 @@ The app will run on the schedule you set in `EASY_DCA_CRON` and send notificatio
 
 **Tip:** When the application starts, it will display a comprehensive summary of your configuration, explaining what each setting does in plain English.
 
-## Environment Variables
-- `EASY_DCA_PUBLIC_KEY`: Kraken API public key (**required**)
-- `EASY_DCA_PRIVATE_KEY`: Kraken API private key (**required**)
+### NixOS (For NixOS users)
+
+If you use NixOS with flakes, you can enable `easy-dca` as a secure systemd timer service:
+
+#### 1. Add the Flake as an Input
+```nix
+{
+  inputs.easy-dca.url = "github:mayrf/easy-dca";
+  # ... other inputs ...
+}
+```
+
+#### 2. Import and Configure
+```nix
+{
+  outputs = { self, nixpkgs, easy-dca, ... }@inputs: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        # ... other modules ...
+        easy-dca.nixosModules.easy-dca
+        ({ config, pkgs, ... }: {
+          services.easy-dca = {
+            enable = true;
+            cronSchedule = "30 2 * * *"; # 2:30am every day
+            user = "easy-dca";
+            group = "easy-dca";
+            
+            # Required API keys (using systemd credentials)
+            publicKeyPath = "/run/secrets/kraken-public-key";
+            privateKeyPath = "/run/secrets/kraken-private-key";
+            
+            # Trading configuration
+            priceFactor = 0.998;
+            dryRun = true; # Only validate orders (default)
+            autoAdjustMinOrder = false;
+            
+            # Buy amount configuration (choose one)
+            fiatAmountPerBuy = 10.0; # Fixed amount per buy
+            # monthlyFiatSpending = 300.0; # Monthly budget (alternative)
+            
+            # Notification configuration (optional)
+            notifyMethod = "ntfy";
+            notifyNtfyTopic = "yourtopic";
+            notifyNtfyURL = "https://ntfy.sh";
+          };
+        })
+      ];
+    };
+  };
+}
+```
+
+#### 3. Set up secrets (with sops-nix or similar)
+```nix
+sops.secrets = {
+  "kraken-public-key" = {
+    path = "/run/secrets/kraken-public-key";
+  };
+  "kraken-private-key" = {
+    path = "/run/secrets/kraken-private-key";
+  };
+};
+```
+
+#### 4. Rebuild and switch
+```sh
+sudo nixos-rebuild switch --flake .#myhost
+```
+
+## Configuration
+
+### Environment Variables
+
+#### Required
+- `EASY_DCA_PUBLIC_KEY`: Kraken API public key
+- `EASY_DCA_PRIVATE_KEY`: Kraken API private key
 
 **Getting Kraken API Keys:**
 - [How to Create a Kraken API Key](https://support.kraken.com/articles/360000919966-how-to-create-an-api-key)
@@ -111,23 +186,71 @@ The app will run on the schedule you set in `EASY_DCA_CRON` and send notificatio
 
 **Required API Permissions:** `Orders and trades - Create & modify orders`
 
-**Pro Tip:** If you have the [Kraken Pro app](https://www.kraken.com/features/cryptocurrency-apps) installed on your phone, you'll receive a notification once your DCA order has been filled!
+#### Trading Configuration
 - `EASY_DCA_PAIR`: Trading pair (default: "BTC/EUR"). Supported pairs: BTC/EUR, BTC/GBP, BTC/CHF, BTC/AUD, BTC/CAD, BTC/USD
 - `EASY_DCA_PRICE_FACTOR`: Price factor for limit orders (default: 0.998)
 - `EASY_DCA_MONTHLY_FIAT_SPENDING`: Monthly fiat spending (optional, used if EASY_DCA_FIAT_AMOUNT_PER_BUY is not set)
 - `EASY_DCA_FIAT_AMOUNT_PER_BUY`: Fixed fiat amount to spend each run (optional, takes precedence over EASY_DCA_MONTHLY_FIAT_SPENDING)
-- `EASY_DCA_CRON`: Cron expression for scheduling (optional; if not set, runs once)
 - `EASY_DCA_AUTO_ADJUST_MIN_ORDER`: If true, automatically adjust orders below minimum size (0.00005 BTC); if false, let them fail (default: false)
+- `EASY_DCA_DRY_RUN`: If true (default), only validate orders (dry run); if false, actually place orders
+- `EASY_DCA_DISPLAY_SATS`: If true, display all BTC amounts in satoshi (default: false)
+
+#### Scheduling
+- `EASY_DCA_CRON`: Cron expression for scheduling (optional; if not set, runs once)
 - `EASY_DCA_SCHEDULER_MODE`: Scheduler mode: "cron", "systemd", or "manual" (default: "cron" if EASY_DCA_CRON is set, otherwise "manual")
+
+#### Notifications
 - `NOTIFY_METHOD`: Notification method (e.g., `ntfy`)
 - `NOTIFY_NTFY_TOPIC`: ntfy topic (if using ntfy)
 - `NOTIFY_NTFY_URL`: ntfy server URL (**required for ntfy notifications**; no default)
-- `EASY_DCA_DRY_RUN`: If true (default), only validate orders (dry run); if false, actually place orders.
+
+#### Logging
 - `EASY_DCA_LOG_FORMAT`: Log format control (default: no timestamp)
   - `"timestamp"` or `"time"`: Standard format (2006/01/02 15:04:05)
   - `"microseconds"` or `"micro"`: Full datetime with microseconds (2006/01/02 15:04:05.000000)
   - Any other value or unset: No timestamp prefix
-- `EASY_DCA_DISPLAY_SATS`: If true, display all BTC amounts in satoshi (default: false)
+
+### Secret Management
+
+For better security, you can provide your Kraken API keys via file paths instead of directly in environment variables:
+
+- `EASY_DCA_PUBLIC_KEY_PATH`: Path to a file containing your Kraken API public key
+- `EASY_DCA_PRIVATE_KEY_PATH`: Path to a file containing your Kraken API private key
+
+This is preferred because secrets are not exposed in environment variables and integrates well with Docker secrets, NixOS systemd credentials, and other secret managers.
+
+### NixOS Module Options
+
+When using the NixOS module, you can configure the service using these options:
+
+#### Service Configuration
+- `enable`: Enable the timer service
+- `cronSchedule`: Cron expression for when to run the service (e.g., `"30 2 * * *"`)
+- `user`/`group`: User/group to run as (created if not present)
+- `persistent`: Run missed events after startup (default: true)
+- `randomizedDelaySec`: Add random delay to timer (default: 0)
+
+#### Trading Configuration
+- `publicKeyPath`/`privateKeyPath`: Paths to files containing Kraken API keys (**required**)
+- `priceFactor`: Price factor for limit orders (default: 0.998)
+- `fiatAmountPerBuy`: Fixed fiat amount per buy in fiat currency (optional)
+- `monthlyFiatSpending`: Monthly fiat spending in fiat currency (optional, used if fiatAmountPerBuy is not set)
+- `autoAdjustMinOrder`: Auto-adjust orders below minimum size (default: false)
+- `dryRun`: Only validate orders (default: true)
+- `displaySats`: Display BTC amounts in sats (default: false)
+
+#### Notification Configuration
+- `notifyMethod`: Notification method (e.g., "ntfy")
+- `notifyNtfyTopic`: ntfy topic (if using ntfy)
+- `notifyNtfyURL`: ntfy server URL (if using ntfy)
+
+#### How Scheduling Works
+- Set your schedule using the `cronSchedule` option (e.g., `"30 2 * * *"` for 2:30am daily)
+- The module converts this to a systemd OnCalendar string for the timer
+- The original cron expression is passed to the app as `EASY_DCA_CRON`
+- The app uses this to calculate the number of executions per month and buy amounts
+
+## Trading Strategy
 
 ### Supported Trading Pairs
 
@@ -139,8 +262,6 @@ The application supports the following BTC trading pairs:
 - **BTC/CAD** - Bitcoin/Canadian Dollar
 - **BTC/USD** - Bitcoin/US Dollar
 
-Set the `EASY_DCA_PAIR` environment variable to use your preferred currency. The application will automatically use the correct currency names in all logs and notifications.
-
 ### Buy Amount Configuration
 
 The app supports two ways to configure how much to buy:
@@ -149,7 +270,6 @@ The app supports two ways to configure how much to buy:
 2. **Monthly amount**: Set `EASY_DCA_MONTHLY_FIAT_SPENDING` and the app will divide it by the number of buys per month (calculated from your cron schedule)
 
 **Examples:**
-
 - **Spend 10 EUR every day**: Set `EASY_DCA_PAIR="BTC/EUR"`, `EASY_DCA_FIAT_AMOUNT_PER_BUY=10` and `EASY_DCA_CRON="0 8 * * *"`
 - **Spend 300 EUR per month, buying every 3 days**: Set `EASY_DCA_PAIR="BTC/EUR"`, `EASY_DCA_MONTHLY_FIAT_SPENDING=300` and `EASY_DCA_CRON="0 8 */3 * *"` (app will spend ~30 EUR each time)
 - **Spend 150 EUR per month, buying weekly**: Set `EASY_DCA_PAIR="BTC/EUR"`, `EASY_DCA_MONTHLY_FIAT_SPENDING=150` and `EASY_DCA_CRON="0 8 * * 1"` (app will spend ~37.5 EUR each time)
@@ -205,182 +325,46 @@ The `EASY_DCA_PRICE_FACTOR` determines at what percentage of the current best se
 - **Lower frequency DCA**: Can use lower price factors (0.95-0.99) for monthly buys
 - **Market conditions**: Consider adjusting based on volatility and trend
 
-## Secret Management: Using Key Path Variables
+## Scheduler Modes
 
-For better security, you can provide your Kraken API keys via file paths instead of directly in environment variables. This is especially useful when using Docker secrets, NixOS credentials, or other secret management systems.
+The app supports different scheduling modes for different deployment scenarios:
 
-- `EASY_DCA_PUBLIC_KEY_PATH`: Path to a file containing your Kraken API public key.
-- `EASY_DCA_PRIVATE_KEY_PATH`: Path to a file containing your Kraken API private key.
+1. **`manual` (default when no cron)**: Run once and exit - perfect for systemd timers, Docker one-shot containers, or manual execution
+2. **`cron` (default when EASY_DCA_CRON is set)**: Use internal cron scheduling - good for standalone deployments or Docker containers that need to run continuously
+3. **`systemd`**: Optimized for systemd timer integration - runs once and exits, letting systemd handle the scheduling
 
-If these variables are set, the app will read the key values from the files. This is preferred because:
-- Secrets are not exposed in environment variables (which can be viewed by other processes or logged).
-- Integrates well with Docker secrets, NixOS systemd credentials, and other secret managers.
+**When to use each mode:**
+- **`manual`**: NixOS systemd timers, Kubernetes CronJobs, manual execution, CI/CD pipelines
+- **`cron`**: Docker containers running continuously, standalone servers, when you want the app to handle its own scheduling
+- **`systemd`**: NixOS systemd timers (explicit mode), when you want to be explicit about systemd integration
 
-### Example: Docker Compose with Secrets
-```yaml
-services:
-  easy-dca:
-    # ...
-    secrets:
-      - kraken-public-key
-      - kraken-private-key
-    environment:
-      EASY_DCA_PUBLIC_KEY_PATH: "/run/secrets/kraken-public-key"
-      EASY_DCA_PRIVATE_KEY_PATH: "/run/secrets/kraken-private-key"
-      # ... other env vars ...
-secrets:
-  kraken-public-key:
-    file: ./secrets/public.key
-  kraken-private-key:
-    file: ./secrets/private.key
+**Examples:**
+```bash
+# Manual mode (runs once)
+EASY_DCA_SCHEDULER_MODE=manual
+
+# Cron mode (internal scheduling)
+EASY_DCA_SCHEDULER_MODE=cron
+EASY_DCA_CRON="0 8 * * *"
+
+# Systemd mode (for systemd timers)
+EASY_DCA_SCHEDULER_MODE=systemd
 ```
 
-### Example: NixOS with systemd credentials
-```nix
-services.easy-dca = {
-  enable = true;
-  credentials = {
-    EASY_DCA_PUBLIC_KEY_PATH = "/run/secrets/kraken-public-key";
-    EASY_DCA_PRIVATE_KEY_PATH = "/run/secrets/kraken-private-key";
-  };
-  environment = {
-    # ... other env vars ...
-  };
-};
-```
+## Development
 
-If both the `*_KEY_PATH` and the direct `*_KEY` variables are set, the path-based version takes precedence.
+### CI/CD
+- GitHub Actions workflow runs linting, tests, and builds the Docker image on every push and pull request to `master`
+- Linting is performed using `golangci-lint` to ensure code quality
 
-## CI/CD
-- GitHub Actions workflow runs linting, tests, and builds the Docker image on every push and pull request to `master`.
-- Linting is performed using `golangci-lint` to ensure code quality.
+### Extending Notifications
+To add more notification backends (Slack, Email, etc.), implement the `Notifier` interface in `cmd/easy-dca/easy-dca.go` and add a case to `getNotifier()`
 
-## Extending Notifications
-To add more notification backends (Slack, Email, etc.), implement the `Notifier` interface in `cmd/easy-dca/easy-dca.go` and add a case to `getNotifier()`.
-
-## NixOS Module Usage
-
-If you use NixOS with flakes, you can enable and schedule `easy-dca` as a secure systemd timer service using the included NixOS module.
-
-### 1. Add the Flake as an Input
-In your system flake (e.g., `flake.nix`):
-
-```nix
-{
-  inputs.easy-dca.url = "github:mayrf/easy-dca";
-  # ... other inputs ...
-}
-```
-
-### 2. Import the NixOS Module
-In your `flake.nix` outputs:
-
-```nix
-{
-  outputs = { self, nixpkgs, easy-dca, ... }@inputs: {
-    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        # ... other modules ...
-        easy-dca.nixosModules.easy-dca
-        ({ config, pkgs, ... }: {
-          # Your configuration goes here
-          services.easy-dca = {
-            enable = true;
-            schedule = "*-*-* 08:00:00";
-            user = "easy-dca";
-            group = "easy-dca";
-            
-            # Required API keys (using systemd credentials)
-            publicKeyPath = "/run/secrets/kraken-public-key";
-            privateKeyPath = "/run/secrets/kraken-private-key";
-            
-            # Trading configuration
-            priceFactor = 0.998;
-            dryRun = true; # Only validate orders (default)
-            # dryRun = false; # Actually place orders
-            autoAdjustMinOrder = false;
-            
-            # Buy amount configuration (choose one)
-            fiatAmountPerBuy = 10.0; # Fixed amount per buy
-            # monthlyFiatSpending = 300.0; # Monthly budget (alternative)
-            
-            # Notification configuration (optional)
-            notifyMethod = "ntfy";
-            notifyNtfyTopic = "yourtopic";
-            notifyNtfyURL = "https://ntfy.sh";
-            
-            # Additional options
-            # extraArgs = [ ];
-          };
-        })
-      ];
-    };
-  };
-}
-```
-
-**Note:** The `publicKeyPath` and `privateKeyPath` options should point to files containing your actual API keys. The module automatically loads these files as systemd credentials and makes them available to the application at runtime. You can use NixOS secrets management or place the key files in a secure location.
-
-**Example with NixOS secrets:**
-```nix
-services.easy-dca = {
-  enable = true;
-  publicKeyPath = "/run/secrets/kraken-public-key";
-  privateKeyPath = "/run/secrets/kraken-private-key";
-  # ... other options
-};
-
-# Set up the secrets
-sops.secrets = {
-  "kraken-public-key" = {
-    path = "/run/secrets/kraken-public-key";
-  };
-  "kraken-private-key" = {
-    path = "/run/secrets/kraken-private-key";
-  };
-};
-```
-
-### 3. Rebuild and Switch
-```sh
-sudo nixos-rebuild switch --flake .#myhost
-```
-
-### Options
-- `enable`: Enable the timer service.
-- `schedule`: Systemd calendar expression (see `man systemd.time`).
-- `user`/`group`: User/group to run as (created if not present).
-- `persistent`: Run missed events after startup (default: true).
-- `randomizedDelaySec`: Add random delay to timer (default: 0).
-
-**easy-dca Configuration Options:**
-- `publicKeyPath`/`privateKeyPath`: Paths to files containing Kraken API keys (**required**).
-- `priceFactor`: Price factor for limit orders (default: 0.998).
-- `fiatAmountPerBuy`: Fixed fiat amount per buy in EUR (optional).
-- `monthlyFiatSpending`: Monthly fiat spending in EUR (optional, used if fiatAmountPerBuy is not set).
-- `autoAdjustMinOrder`: Auto-adjust orders below minimum size (default: false).
-- `dryRun`: Only validate orders (default: true).
-- `notifyMethod`: Notification method (e.g., "ntfy").
-- `notifyNtfyTopic`: ntfy topic (if using ntfy).
-- `notifyNtfyURL`: ntfy server URL (if using ntfy).
-
-**Legacy Options:**
-- `environment`: Additional environment variables (legacy option).
-- `extraArgs`: Additional command line arguments.
-
-### Security
-The service runs with strong systemd hardening by default (see flake.nix for details).
-
-## License
-Please see the LICENSE file for details.
-
-## Example Config Files
-
-- `.env.example`: Template for environment variables. Copy to `.env` and fill in your values.
-- `docker-compose.yml`: Docker Compose configuration with default settings for production deployment.
-- `examples/public.key.example`, `examples/private.key.example`: Example key files for use with Docker secrets or NixOS credentials. Replace with your real keys in production.
-- `scripts/`: Utility scripts for running the application in different modes.
+### Example Config Files
+- `.env.example`: Template for environment variables. Copy to `.env` and fill in your values
+- `docker-compose.yml`: Docker Compose configuration with default settings for production deployment
+- `examples/public.key.example`, `examples/private.key.example`: Example key files for use with Docker secrets or NixOS credentials. Replace with your real keys in production
+- `scripts/`: Utility scripts for running the application in different modes
 
 ### Getting Started
 
@@ -401,35 +385,18 @@ cp examples/private.key.example examples/private.key
 
 **Important:** Always edit the copied files with your real values before deploying.
 
+## Security
+
+The NixOS service runs with strong systemd hardening by default (see flake.nix for details).
+
+## License
+
+Please see the LICENSE file for details.
+
 ## Transparency & AI Involvement
 
-This project was developed with the assistance of large language model (LLM) coding agents. Automated code suggestions, refactoring, and documentation were generated and reviewed as part of the development process. Please review and audit the code for your own use case and security requirements. 
+This project was developed with the assistance of large language model (LLM) coding agents. Automated code suggestions, refactoring, and documentation were generated and reviewed as part of the development process. Please review and audit the code for your own use case and security requirements.
 
 > **Note:** For ntfy notifications, both `NOTIFY_NTFY_TOPIC` and `NOTIFY_NTFY_URL` must be set. If `NOTIFY_NTFY_URL` is missing, notifications will be disabled and a warning will be logged.
 
-### Scheduler Modes
-
-The app supports different scheduling modes for different deployment scenarios:
-
-1. **`manual` (default when no cron)**: Run once and exit - perfect for systemd timers, Docker one-shot containers, or manual execution
-2. **`cron` (default when EASY_DCA_CRON is set)**: Use internal cron scheduling - good for standalone deployments or Docker containers that need to run continuously
-3. **`systemd`**: Optimized for systemd timer integration - runs once and exits, letting systemd handle the scheduling
-
-**When to use each mode:**
-
-- **`manual`**: NixOS systemd timers, Kubernetes CronJobs, manual execution, CI/CD pipelines
-- **`cron`**: Docker containers running continuously, standalone servers, when you want the app to handle its own scheduling
-- **`systemd`**: NixOS systemd timers (explicit mode), when you want to be explicit about systemd integration
-
-**Examples:**
-```bash
-# Manual mode (runs once)
-EASY_DCA_SCHEDULER_MODE=manual
-
-# Cron mode (internal scheduling)
-EASY_DCA_SCHEDULER_MODE=cron
-EASY_DCA_CRON="0 8 * * *"
-
-# Systemd mode (for systemd timers)
-EASY_DCA_SCHEDULER_MODE=systemd
-```
+**Pro Tip:** If you have the [Kraken Pro app](https://www.kraken.com/features/cryptocurrency-apps) installed on your phone, you'll receive a notification once your DCA order has been filled!
