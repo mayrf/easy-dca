@@ -250,4 +250,58 @@ func TestCalculateBuysPerMonth_WeeklyCron(t *testing.T) {
 	if buys < 4 || buys > 5 {
 		t.Errorf("expected ~4-5 buys for weekly cron, got %d", buys)
 	}
+}
+
+func TestFormatBTC_SatsWithSeparators(t *testing.T) {
+	cfg := &Config{DisplaySats: true}
+	
+	tests := []struct {
+		amount float32
+		want   string
+	}{
+		{0.00001, "1,000"},           // 1000 sats
+		{0.0001, "10,000"},           // 10000 sats
+		{0.001, "100,000"},           // 100000 sats
+		{0.01, "1,000,000"},          // 1000000 sats
+		{0.1, "10,000,000"},          // 10000000 sats
+		{1.0, "100,000,000"},         // 100000000 sats
+		{0.00005, "5,000"},           // 5000 sats
+		{0.000123, "12,300"},         // 12300 sats
+		{0.000999, "99,900"},         // 99900 sats
+		{0.000001, "100"},            // 100 sats (no separator needed)
+		{0.000009, "900"},            // 900 sats (no separator needed)
+	}
+	
+	for _, tt := range tests {
+		got := cfg.FormatBTC(tt.amount)
+		if got != tt.want {
+			t.Errorf("FormatBTC(%f) = %s, want %s", tt.amount, got, tt.want)
+		}
+	}
+}
+
+func TestFormatBTC_BTCWithoutSeparators(t *testing.T) {
+	cfg := &Config{DisplaySats: false}
+	
+	tests := []struct {
+		amount float32
+		want   string
+	}{
+		{0.00001, "0.00001000"},
+		{0.0001, "0.00010000"},
+		{0.001, "0.00100000"},
+		{0.01, "0.01000000"},
+		{0.1, "0.10000000"},
+		{1.0, "1.00000000"},
+		{0.00005, "0.00005000"},
+		{0.000123, "0.00012300"},
+		{0.000999, "0.00099900"},
+	}
+	
+	for _, tt := range tests {
+		got := cfg.FormatBTC(tt.amount)
+		if got != tt.want {
+			t.Errorf("FormatBTC(%f) = %s, want %s", tt.amount, got, tt.want)
+		}
+	}
 } 

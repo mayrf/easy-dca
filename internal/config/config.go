@@ -344,10 +344,29 @@ func LoadConfig() (Config, error) {
 	return cfg, nil
 }
 
+// formatNumberWithSeparators formats a number with thousands separators
+func formatNumberWithSeparators(n int64) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	
+	// Convert to string and add separators from right to left
+	str := fmt.Sprintf("%d", n)
+	result := ""
+	for i, digit := range str {
+		if i > 0 && (len(str)-i)%3 == 0 {
+			result += "," // Use comma as separator
+		}
+		result += string(digit)
+	}
+	return result
+}
+
 // FormatBTC formats a BTC amount according to the display configuration
 func (c *Config) FormatBTC(amount float32) string {
 	if c.DisplaySats {
-		return fmt.Sprintf("%.0f", amount*100000000)
+		sats := int64(amount * 100000000)
+		return formatNumberWithSeparators(sats)
 	}
 	return fmt.Sprintf("%.8f", amount)
 }
