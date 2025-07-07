@@ -27,8 +27,8 @@ func NewRunner(cfg config.Config, notifier notifications.Notifier) *Runner {
 
 // RunDCA performs one DCA cycle and sends a notification if configured.
 func (r *Runner) RunDCA() error {
-	log.Printf("Fetching orders for %s", r.cfg.Pair)
-	response, err := kraken.GetOrderBook(r.cfg.Pair, 10)
+	log.Printf("Fetching orders for %s", r.cfg.Pair.String())
+	response, err := kraken.GetOrderBook(r.cfg.Pair.String(), 10)
 	if err != nil {
 		log.Printf("Failed to fetch order book: %v", err)
 		if r.notifier != nil {
@@ -39,7 +39,7 @@ func (r *Runner) RunDCA() error {
 		return fmt.Errorf("failed to fetch order book: %w", err)
 	}
 	
-	orderBook := response.Result[r.cfg.Pair]
+	orderBook := response.Result[r.cfg.Pair.String()]
 	log.Printf("Best Ask: Price=%.2f, Volume=%.3f\n",
 		orderBook.Asks[0].Price, orderBook.Asks[0].Volume)
 
@@ -75,7 +75,9 @@ func (r *Runner) RunDCA() error {
 			btcQuantityToBuy = minBtcSize
 			// Recalculate the actual fiat amount that will be spent
 			actualFiatAmount := btcQuantityToBuy * buyPrice
-			log.Printf("Note: This will actually spend %.2f EUR instead of the configured %.2f EUR", actualFiatAmount, fiatAmountToSpend)
+			log.Printf("Note: This will actually spend %.2f %s instead of the configured %.2f %s", 
+				actualFiatAmount, r.cfg.Pair.GetFiatCurrency(), 
+				fiatAmountToSpend, r.cfg.Pair.GetFiatCurrency())
 		} else {
 			log.Printf("Order volume of %.8f BTC is below minimum (%.5f BTC) and auto-adjustment is disabled", btcQuantityToBuy, minBtcSize)
 			log.Printf("Order will likely fail, but cron job will continue running")
@@ -83,12 +85,13 @@ func (r *Runner) RunDCA() error {
 	}
 	
 	log.Printf("Ordering price factor: %.4f, Ordering Price: %.2f", r.cfg.PriceFactor, buyPrice)
-	log.Printf("Ordering %.8f BTC at a price of %.2f for a total of %.2f Euro", btcQuantityToBuy, buyPrice, btcQuantityToBuy*buyPrice)
+	log.Printf("Ordering %.8f BTC at a price of %.2f for a total of %.2f %s", 
+		btcQuantityToBuy, buyPrice, btcQuantityToBuy*buyPrice, r.cfg.Pair.GetFiatCurrencyName())
 	if r.cfg.DryRun {
 		log.Printf("Dry run mode: order will only be validated, not executed.")
 	}
 	
-	orderResponse, err := kraken.AddOrder(r.cfg.Pair, float32(buyPrice), float32(btcQuantityToBuy), r.cfg.PublicKey, r.cfg.PrivateKey, r.cfg.DryRun)
+	orderResponse, err := kraken.AddOrder(r.cfg.Pair.String(), float32(buyPrice), float32(btcQuantityToBuy), r.cfg.PublicKey, r.cfg.PrivateKey, r.cfg.DryRun)
 	if err != nil {
 		log.Printf("Failed to add order: %v", err)
 		if r.notifier != nil {
@@ -105,14 +108,18 @@ func (r *Runner) RunDCA() error {
 	// Create notification message with order details
 	var msg string
 	if r.cfg.DryRun {
-		msg = fmt.Sprintf("DRY RUN: Validated order for %.8f BTC at %.2f EUR (total %.2f EUR)", btcQuantityToBuy, buyPrice, fiatAmountToSpend)
+		msg = fmt.Sprintf("DRY RUN: Validated order for %.8f BTC at %.2f %s (total %.2f %s)", 
+			btcQuantityToBuy, buyPrice, r.cfg.Pair.GetFiatCurrency(), 
+			fiatAmountToSpend, r.cfg.Pair.GetFiatCurrency())
 	} else {
 		if len(orderResponse.Result.Txid) > 0 {
-			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f EUR (total %.2f EUR) | TXID: %s", 
-				btcQuantityToBuy, buyPrice, fiatAmountToSpend, orderResponse.Result.Txid[0])
+			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f %s (total %.2f %s) | TXID: %s", 
+				btcQuantityToBuy, buyPrice, r.cfg.Pair.GetFiatCurrency(), 
+				fiatAmountToSpend, r.cfg.Pair.GetFiatCurrency(), orderResponse.Result.Txid[0])
 		} else {
-			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f EUR (total %.2f EUR)", 
-				btcQuantityToBuy, buyPrice, fiatAmountToSpend)
+			msg = fmt.Sprintf("LIVE ORDER: Placed order for %.8f BTC at %.2f %s (total %.2f %s)", 
+				btcQuantityToBuy, buyPrice, r.cfg.Pair.GetFiatCurrency(), 
+				fiatAmountToSpend, r.cfg.Pair.GetFiatCurrency())
 		}
 	}
 	

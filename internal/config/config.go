@@ -12,17 +12,73 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+// TradingPair represents a supported trading pair with validation
+type TradingPair struct {
+	value string
+}
+
+// Supported trading pairs
+var supportedPairs = map[string]string{
+	"BTC/EUR": "EUR",
+	"BTC/GBP": "GBP", 
+	"BTC/CHF": "CHF",
+	"BTC/AUD": "AUD",
+	"BTC/CAD": "CAD",
+	"BTC/USD": "USD",
+}
+
+// NewTradingPair creates a new TradingPair with validation
+func NewTradingPair(pair string) (TradingPair, error) {
+	if _, exists := supportedPairs[pair]; !exists {
+		return TradingPair{}, fmt.Errorf("unsupported trading pair: %s. Supported pairs: %s", 
+			pair, strings.Join(GetSupportedPairs(), ", "))
+	}
+	return TradingPair{value: pair}, nil
+}
+
+// String returns the string representation of the trading pair
+func (tp TradingPair) String() string {
+	return tp.value
+}
+
+// GetFiatCurrency returns the fiat currency code for this trading pair
+func (tp TradingPair) GetFiatCurrency() string {
+	return supportedPairs[tp.value]
+}
+
+// GetFiatCurrencyName returns the full name of the fiat currency
+func (tp TradingPair) GetFiatCurrencyName() string {
+	currencyNames := map[string]string{
+		"EUR": "Euro",
+		"GBP": "British Pound",
+		"CHF": "Swiss Franc", 
+		"AUD": "Australian Dollar",
+		"CAD": "Canadian Dollar",
+		"USD": "US Dollar",
+	}
+	return currencyNames[tp.GetFiatCurrency()]
+}
+
+// GetSupportedPairs returns a slice of all supported trading pairs
+func GetSupportedPairs() []string {
+	pairs := make([]string, 0, len(supportedPairs))
+	for pair := range supportedPairs {
+		pairs = append(pairs, pair)
+	}
+	return pairs
+}
+
 // Config holds all configuration values for the application.
 type Config struct {
-	PublicKey           string  // Kraken API public key
-	PrivateKey          string  // Kraken API private key
-	Pair                string  // Trading pair, e.g., BTC/EUR
-	DryRun              bool    // If true, only validate orders (dry run); if false, actually place orders
-	PriceFactor         float32 // Price factor for limit orders
-	MonthlyFiatSpending float32 // Monthly fiat spending (optional, used if FiatAmountPerBuy is not set)
-	FiatAmountPerBuy    float32 // Fixed fiat amount to spend each run (optional, takes precedence over MonthlyFiatSpending)
-	AutoAdjustMinOrder  bool    // If true, automatically adjust orders below minimum size; if false, let them fail
-	SchedulerMode       string  // Scheduler mode: "cron", "systemd", or "manual" (default: "cron" if EASY_DCA_CRON is set, otherwise "manual")
+	PublicKey           string      // Kraken API public key
+	PrivateKey          string      // Kraken API private key
+	Pair                TradingPair // Trading pair, e.g., BTC/EUR
+	DryRun              bool        // If true, only validate orders (dry run); if false, actually place orders
+	PriceFactor         float32     // Price factor for limit orders
+	MonthlyFiatSpending float32     // Monthly fiat spending (optional, used if FiatAmountPerBuy is not set)
+	FiatAmountPerBuy    float32     // Fixed fiat amount to spend each run (optional, takes precedence over MonthlyFiatSpending)
+	AutoAdjustMinOrder  bool        // If true, automatically adjust orders below minimum size; if false, let them fail
+	SchedulerMode       string      // Scheduler mode: "cron", "systemd", or "manual" (default: "cron" if EASY_DCA_CRON is set, otherwise "manual")
 
 	CronExpr     string // Cron expression for scheduling (optional)
 	BuysPerMonth int    // Number of buys per month (calculated from cron expression)
@@ -33,8 +89,8 @@ type Config struct {
 	// Add more fields for other notification methods as needed
 }
 
-// configureLogging sets up the log format based on environment variables
-func configureLogging() {
+// ConfigureLogging sets up the log format based on environment variables
+func ConfigureLogging() {
 	logFormat := os.Getenv("EASY_DCA_LOG_FORMAT")
 	
 	switch strings.ToLower(logFormat) {
@@ -55,7 +111,7 @@ func logConfiguration(cfg Config) {
 	log.Print("=== easy-dca Configuration Summary ===")
 	
 	// Trading pair
-	log.Printf("📊 Trading pair: %s", cfg.Pair)
+	log.Printf("📊 Trading pair: %s", cfg.Pair.String())
 	
 	// Execution mode
 	if cfg.DryRun {
@@ -66,10 +122,12 @@ func logConfiguration(cfg Config) {
 	
 	// Buy amount configuration
 	if cfg.FiatAmountPerBuy > 0 {
-		log.Printf("💰 Fixed amount per buy: %.2f EUR", cfg.FiatAmountPerBuy)
+		log.Printf("💰 Fixed amount per buy: %.2f %s", cfg.FiatAmountPerBuy, cfg.Pair.GetFiatCurrency())
 	} else if cfg.MonthlyFiatSpending > 0 {
-		log.Printf("💰 Monthly budget: %.2f EUR (%.2f EUR per buy, %d buys/month)", 
-			cfg.MonthlyFiatSpending, cfg.MonthlyFiatSpending/float32(cfg.BuysPerMonth), cfg.BuysPerMonth)
+		log.Printf("💰 Monthly budget: %.2f %s (%.2f %s per buy, %d buys/month)", 
+			cfg.MonthlyFiatSpending, cfg.Pair.GetFiatCurrency(), 
+			cfg.MonthlyFiatSpending/float32(cfg.BuysPerMonth), cfg.Pair.GetFiatCurrency(), 
+			cfg.BuysPerMonth)
 	}
 	
 	// Price factor explanation
@@ -200,7 +258,6 @@ func calculateBuysPerMonth(cronExpr string) (int, error) {
 // Returns an error if required configuration is missing or invalid.
 func LoadConfig() (Config, error) {
 	var cfg Config
-	cfg.Pair = "BTC/EUR"
 
 	// 1. Load and validate required API keys first (fail fast)
 	publicKey, err := loadFileToString(os.Getenv("EASY_DCA_PUBLIC_KEY_PATH"))
@@ -222,8 +279,13 @@ func LoadConfig() (Config, error) {
 	cfg.PrivateKey = strings.TrimSpace(privateKey)
 
 	// 2. Load basic configuration
-
-	cfg.Pair = getEnvAsString("EASY_DCA_PAIR","BTC/EUR")
+	pairStr := getEnvAsString("EASY_DCA_PAIR", "BTC/EUR")
+	pair, err := NewTradingPair(pairStr)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.Pair = pair
+	
 	cfg.DryRun = getEnvAsBool("EASY_DCA_DRY_RUN", true)
 	cfg.PriceFactor = getEnvAsFloat32("EASY_DCA_PRICE_FACTOR", 0.998)
 	cfg.MonthlyFiatSpending = getEnvAsFloat32("EASY_DCA_MONTHLY_FIAT_SPENDING", 0.0)

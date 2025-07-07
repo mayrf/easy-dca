@@ -40,6 +40,7 @@
             go
             gopls # Go language server
             gotools # goimports, godoc, etc.
+            golangci-lint
             # delve # Go debugger (optional)
           ];
 
@@ -126,17 +127,24 @@
                 example = 0.998;
               };
 
+              pair = mkOption {
+                type = types.str;
+                default = "BTC/EUR";
+                description = "Trading pair. Supported pairs: BTC/EUR, BTC/GBP, BTC/CHF, BTC/AUD, BTC/CAD, BTC/USD";
+                example = "BTC/EUR";
+              };
+
               fiatAmountPerBuy = mkOption {
                 type = types.nullOr types.float;
                 default = null;
-                description = "Fixed fiat amount in EUR to spend each run";
+                description = "Fixed fiat amount to spend each run";
                 example = 10.0;
               };
 
               monthlyFiatSpending = mkOption {
                 type = types.nullOr types.float;
                 default = null;
-                description = "Monthly fiat spending in EUR (used if fiatAmountPerBuy is not set)";
+                description = "Monthly fiat spending (used if fiatAmountPerBuy is not set)";
                 example = 300.0;
               };
 
@@ -252,6 +260,7 @@
                   EASY_DCA_PRIVATE_KEY_PATH = "%d/kraken-private-key";
                   
                   # Trading configuration
+                  EASY_DCA_PAIR = cfg.pair;
                   EASY_DCA_PRICE_FACTOR = toString cfg.priceFactor;
                   EASY_DCA_DRY_RUN = toString cfg.dryRun;
                   EASY_DCA_AUTO_ADJUST_MIN_ORDER = toString cfg.autoAdjustMinOrder;

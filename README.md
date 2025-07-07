@@ -112,9 +112,10 @@ The app will run on the schedule you set in `EASY_DCA_CRON` and send notificatio
 **Required API Permissions:** `Orders and trades - Create & modify orders`
 
 **Pro Tip:** If you have the [Kraken Pro app](https://www.kraken.com/features/cryptocurrency-apps) installed on your phone, you'll receive a notification once your DCA order has been filled!
+- `EASY_DCA_PAIR`: Trading pair (default: "BTC/EUR"). Supported pairs: BTC/EUR, BTC/GBP, BTC/CHF, BTC/AUD, BTC/CAD, BTC/USD
 - `EASY_DCA_PRICE_FACTOR`: Price factor for limit orders (default: 0.998)
-- `EASY_DCA_MONTHLY_FIAT_SPENDING`: Monthly fiat spending in EUR (optional, used if EASY_DCA_FIAT_AMOUNT_PER_BUY is not set)
-- `EASY_DCA_FIAT_AMOUNT_PER_BUY`: Fixed fiat amount in EUR to spend each run (optional, takes precedence over EASY_DCA_MONTHLY_FIAT_SPENDING)
+- `EASY_DCA_MONTHLY_FIAT_SPENDING`: Monthly fiat spending (optional, used if EASY_DCA_FIAT_AMOUNT_PER_BUY is not set)
+- `EASY_DCA_FIAT_AMOUNT_PER_BUY`: Fixed fiat amount to spend each run (optional, takes precedence over EASY_DCA_MONTHLY_FIAT_SPENDING)
 - `EASY_DCA_CRON`: Cron expression for scheduling (optional; if not set, runs once)
 - `EASY_DCA_AUTO_ADJUST_MIN_ORDER`: If true, automatically adjust orders below minimum size (0.00005 BTC); if false, let them fail (default: false)
 - `EASY_DCA_SCHEDULER_MODE`: Scheduler mode: "cron", "systemd", or "manual" (default: "cron" if EASY_DCA_CRON is set, otherwise "manual")
@@ -127,6 +128,18 @@ The app will run on the schedule you set in `EASY_DCA_CRON` and send notificatio
   - `"microseconds"` or `"micro"`: Full datetime with microseconds (2006/01/02 15:04:05.000000)
   - Any other value or unset: No timestamp prefix
 
+### Supported Trading Pairs
+
+The application supports the following BTC trading pairs:
+- **BTC/EUR** - Bitcoin/Euro (default)
+- **BTC/GBP** - Bitcoin/British Pound
+- **BTC/CHF** - Bitcoin/Swiss Franc
+- **BTC/AUD** - Bitcoin/Australian Dollar
+- **BTC/CAD** - Bitcoin/Canadian Dollar
+- **BTC/USD** - Bitcoin/US Dollar
+
+Set the `EASY_DCA_PAIR` environment variable to use your preferred currency. The application will automatically use the correct currency names in all logs and notifications.
+
 ### Buy Amount Configuration
 
 The app supports two ways to configure how much to buy:
@@ -136,9 +149,10 @@ The app supports two ways to configure how much to buy:
 
 **Examples:**
 
-- **Spend 10 EUR every day**: Set `EASY_DCA_FIAT_AMOUNT_PER_BUY=10` and `EASY_DCA_CRON="0 8 * * *"`
-- **Spend 300 EUR per month, buying every 3 days**: Set `EASY_DCA_MONTHLY_FIAT_SPENDING=300` and `EASY_DCA_CRON="0 8 */3 * *"` (app will spend ~30 EUR each time)
-- **Spend 150 EUR per month, buying weekly**: Set `EASY_DCA_MONTHLY_FIAT_SPENDING=150` and `EASY_DCA_CRON="0 8 * * 1"` (app will spend ~37.5 EUR each time)
+- **Spend 10 EUR every day**: Set `EASY_DCA_PAIR="BTC/EUR"`, `EASY_DCA_FIAT_AMOUNT_PER_BUY=10` and `EASY_DCA_CRON="0 8 * * *"`
+- **Spend 300 EUR per month, buying every 3 days**: Set `EASY_DCA_PAIR="BTC/EUR"`, `EASY_DCA_MONTHLY_FIAT_SPENDING=300` and `EASY_DCA_CRON="0 8 */3 * *"` (app will spend ~30 EUR each time)
+- **Spend 150 EUR per month, buying weekly**: Set `EASY_DCA_PAIR="BTC/EUR"`, `EASY_DCA_MONTHLY_FIAT_SPENDING=150` and `EASY_DCA_CRON="0 8 * * 1"` (app will spend ~37.5 EUR each time)
+- **Spend 20 USD daily**: Set `EASY_DCA_PAIR="BTC/USD"`, `EASY_DCA_FIAT_AMOUNT_PER_BUY=20` and `EASY_DCA_CRON="0 8 * * *"`
 
 **Note:** If both `EASY_DCA_FIAT_AMOUNT_PER_BUY` and `EASY_DCA_MONTHLY_FIAT_SPENDING` are set, the fixed amount per buy takes precedence.
 

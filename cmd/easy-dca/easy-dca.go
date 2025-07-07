@@ -30,6 +30,8 @@ var Version = "dev"
 
 // main is the entrypoint for the easy-dca CLI application.
 func main() {
+	config.ConfigureLogging()
+
 	versionFlag := flag.Bool("version", false, "Print version and exit")
 	cronFlag := flag.String("cron", "", "Cron expression for scheduling (overrides EASY_DCA_CRON)")
 	flag.Parse()
@@ -82,7 +84,7 @@ func main() {
 	}()
 
 	// Start the scheduler
-	log.Printf("Starting easy-dca with configuration: %s", cfg.Pair)
+	log.Printf("Starting easy-dca with configuration: %s", cfg.Pair.String())
 	if err := sched.Start(ctx); err != nil {
 		log.Printf("Scheduler error: %v", err)
 		os.Exit(1)
