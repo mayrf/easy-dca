@@ -126,7 +126,7 @@ If you use NixOS with flakes, you can enable `easy-dca` as a secure systemd time
         ({ config, pkgs, ... }: {
           services.easy-dca = {
             enable = true;
-            cronSchedule = "30 2 * * *"; # 2:30am every day
+            schedule = "*-*-* 02:30:00"; # 2:30am every day
             user = "easy-dca";
             group = "easy-dca";
             
@@ -139,9 +139,8 @@ If you use NixOS with flakes, you can enable `easy-dca` as a secure systemd time
             dryRun = true; # Only validate orders (default)
             autoAdjustMinOrder = false;
             
-            # Buy amount configuration (choose one)
-            fiatAmountPerBuy = 10.0; # Fixed amount per buy
-            # monthlyFiatSpending = 300.0; # Monthly budget (alternative)
+            # Buy amount configuration
+            fiatAmountPerBuy = 10.0; # Fixed amount per buy (required for systemd timers)
             
             # Notification configuration (optional)
             notifyMethod = "ntfy";
@@ -225,7 +224,7 @@ When using the NixOS module, you can configure the service using these options:
 
 #### Service Configuration
 - `enable`: Enable the timer service
-- `cronSchedule`: Cron expression for when to run the service (e.g., `"30 2 * * *"`)
+- `schedule`: Systemd calendar expression for when to run the service (e.g., `"*-*-* 02:30:00"` for 2:30am daily)
 - `user`/`group`: User/group to run as (created if not present)
 - `persistent`: Run missed events after startup (default: true)
 - `randomizedDelaySec`: Add random delay to timer (default: 0)
@@ -233,8 +232,8 @@ When using the NixOS module, you can configure the service using these options:
 #### Trading Configuration
 - `publicKeyPath`/`privateKeyPath`: Paths to files containing Kraken API keys (**required**)
 - `priceFactor`: Price factor for limit orders (default: 0.998)
-- `fiatAmountPerBuy`: Fixed fiat amount per buy in fiat currency (optional)
-- `monthlyFiatSpending`: Monthly fiat spending in fiat currency (optional, used if fiatAmountPerBuy is not set)
+- `fiatAmountPerBuy`: Fixed fiat amount per buy in fiat currency (**required for systemd timers**)
+- `monthlyFiatSpending`: Monthly fiat spending in fiat currency (**not available with systemd timers** - see limitations below)
 - `autoAdjustMinOrder`: Auto-adjust orders below minimum size (default: false)
 - `dryRun`: Only validate orders (default: true)
 - `displaySats`: Display BTC amounts in sats (default: false)
@@ -245,10 +244,15 @@ When using the NixOS module, you can configure the service using these options:
 - `notifyNtfyURL`: ntfy server URL (if using ntfy)
 
 #### How Scheduling Works
-- Set your schedule using the `cronSchedule` option (e.g., `"30 2 * * *"` for 2:30am daily)
-- The module converts this to a systemd OnCalendar string for the timer
-- The original cron expression is passed to the app as `EASY_DCA_CRON`
-- The app uses this to calculate the number of executions per month and buy amounts
+- Set your schedule using the `schedule` option with systemd calendar format (e.g., `"*-*-* 02:30:00"` for 2:30am daily)
+- The module uses this directly as the systemd OnCalendar string for the timer
+- **Important**: When using systemd timers, you **must** use `fiatAmountPerBuy` for buy amounts
+- The `monthlyFiatSpending` option is **not available** with systemd timers because the application cannot reliably calculate the number of executions per month from the systemd timer schedule
+
+#### Systemd Timer Limitations
+- **Monthly buy calculations don't work**: The application cannot determine how many times per month the systemd timer will execute
+- **Use fixed amounts only**: Set `fiatAmountPerBuy` to specify exactly how much to spend each time the timer runs
+- **No cron expression parsing**: The systemd timer handles scheduling, not the application's cron parser
 
 ## Trading Strategy
 
@@ -331,12 +335,12 @@ The app supports different scheduling modes for different deployment scenarios:
 
 1. **`manual` (default when no cron)**: Run once and exit - perfect for systemd timers, Docker one-shot containers, or manual execution
 2. **`cron` (default when EASY_DCA_CRON is set)**: Use internal cron scheduling - good for standalone deployments or Docker containers that need to run continuously
-3. **`systemd`**: Optimized for systemd timer integration - runs once and exits, letting systemd handle the scheduling
+3. **`systemd`**: Optimized for systemd timer integration - runs once and exits, letting systemd handle the scheduling. **Note**: Monthly buy amount calculations (`EASY_DCA_MONTHLY_FIAT_SPENDING`) are not supported in this mode; use `EASY_DCA_FIAT_AMOUNT_PER_BUY` instead.
 
 **When to use each mode:**
 - **`manual`**: NixOS systemd timers, Kubernetes CronJobs, manual execution, CI/CD pipelines
 - **`cron`**: Docker containers running continuously, standalone servers, when you want the app to handle its own scheduling
-- **`systemd`**: NixOS systemd timers (explicit mode), when you want to be explicit about systemd integration
+- **`systemd`**: NixOS systemd timers (explicit mode), when you want to be explicit about systemd integration. **Requires fixed buy amounts only.**
 
 **Examples:**
 ```bash

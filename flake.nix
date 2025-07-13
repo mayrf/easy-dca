@@ -68,42 +68,16 @@
 
             # Get the Go application from the flake
             easy-dca-app = self.packages.${pkgs.system}.easy-dca;
-
-            # Helper: Convert cron to OnCalendar (simple cases only)
-            cronToOnCalendar = cronExpr: let
-              parts = builtins.match "([0-9*]+) ([0-9*]+) ([0-9*]+) ([0-9*]+) ([0-9*]+)" cronExpr;
-            in if parts == null then
-              throw "Invalid cron expression: ${cronExpr}"
-            else
-              let
-                minute = builtins.elemAt parts 0;
-                hour = builtins.elemAt parts 1;
-                day = builtins.elemAt parts 2;
-                month = builtins.elemAt parts 3;
-                weekday = builtins.elemAt parts 4;
-                # Only support simple daily/weekly/monthly cases for now
-                onCal =
-                  if day == "*" && month == "*" && weekday == "*" then
-                    "*-*-* ${hour}:${minute}:00"
-                  else if weekday != "*" && day == "*" && month == "*" then
-                    "*-*-* ${hour}:${minute}:00"
-                  else if day != "*" && month == "*" && weekday == "*" then
-                    "*-*-${day} ${hour}:${minute}:00"
-                  else
-                    throw "Complex cron expressions are not supported: ${cronExpr}";
-              in onCal;
-
-            onCalendar = cronToOnCalendar cfg.cronSchedule;
-
           in {
             options.services.easy-dca = {
               enable = mkEnableOption "easy-dca Timer Service";
 
-              cronSchedule = mkOption {
+              schedule = mkOption {
                 type = types.str;
-                default = "30 2 * * *";
-                description = "Cron expression for when to run the service (e.g., '30 2 * * *' for 2:30am daily)";
-                example = "30 2 * * *";
+                default = "daily";
+                description =
+                  "Systemd calendar expression for when to run the service";
+                example = "*-*-* 02:30:00";
               };
 
               user = mkOption {
@@ -155,7 +129,8 @@
               pair = mkOption {
                 type = types.str;
                 default = "BTC/EUR";
-                description = "Trading pair. Supported pairs: BTC/EUR, BTC/GBP, BTC/CHF, BTC/AUD, BTC/CAD, BTC/USD";
+                description =
+                  "Trading pair. Supported pairs: BTC/EUR, BTC/GBP, BTC/CHF, BTC/AUD, BTC/CAD, BTC/USD";
                 example = "BTC/EUR";
               };
 
@@ -164,13 +139,6 @@
                 default = null;
                 description = "Fixed fiat amount to spend each run";
                 example = 10.0;
-              };
-
-              monthlyFiatSpending = mkOption {
-                type = types.nullOr types.float;
-                default = null;
-                description = "Monthly fiat spending (used if fiatAmountPerBuy is not set)";
-                example = 300.0;
               };
 
               autoAdjustMinOrder = mkOption {
@@ -182,7 +150,8 @@
               dryRun = mkOption {
                 type = types.bool;
                 default = true;
-                description = "Only validate orders (dry run); if false, actually place orders";
+                description =
+                  "Only validate orders (dry run); if false, actually place orders";
               };
 
               displaySats = mkOption {
@@ -218,7 +187,7 @@
               systemd.timers."easy-dca-timer-service" = {
                 wantedBy = [ "timers.target" ];
                 timerConfig = {
-                  OnCalendar = onCalendar;
+                  OnCalendar = cfg.schedule;
                   Persistent = cfg.persistent;
                   RandomizedDelaySec = cfg.randomizedDelaySec;
                 };
@@ -259,12 +228,21 @@
                 # Set environment variables from module options
                 environment = (let
                   # Build conditional environment variables
-                  conditionalEnv = {}
-                    // (if cfg.fiatAmountPerBuy != null then { EASY_DCA_FIAT_AMOUNT_PER_BUY = toString cfg.fiatAmountPerBuy; } else {})
-                    // (if cfg.monthlyFiatSpending != null then { EASY_DCA_MONTHLY_FIAT_SPENDING = toString cfg.monthlyFiatSpending; } else {})
-                    // (if cfg.notifyMethod != null then { NOTIFY_METHOD = cfg.notifyMethod; } else {})
-                    // (if cfg.notifyNtfyTopic != null then { NOTIFY_NTFY_TOPIC = cfg.notifyNtfyTopic; } else {})
-                    // (if cfg.notifyNtfyURL != null then { NOTIFY_NTFY_URL = cfg.notifyNtfyURL; } else {});
+                  conditionalEnv = { }
+                    // (if cfg.fiatAmountPerBuy != null then {
+                      EASY_DCA_FIAT_AMOUNT_PER_BUY =
+                        toString cfg.fiatAmountPerBuy;
+                    } else
+                      { }) // (if cfg.notifyMethod != null then {
+                        NOTIFY_METHOD = cfg.notifyMethod;
+                      } else
+                        { }) // (if cfg.notifyNtfyTopic != null then {
+                          NOTIFY_NTFY_TOPIC = cfg.notifyNtfyTopic;
+                        } else
+                          { }) // (if cfg.notifyNtfyURL != null then {
+                            NOTIFY_NTFY_URL = cfg.notifyNtfyURL;
+                          } else
+                            { });
                 in {
                   # Required API keys (using systemd credentials)
                   EASY_DCA_PUBLIC_KEY_PATH = "%d/kraken-public-key";
@@ -279,7 +257,6 @@
 
                   # Scheduler mode (always systemd for NixOS)
                   EASY_DCA_SCHEDULER_MODE = "systemd";
-                  EASY_DCA_CRON = cfg.cronSchedule;
                 } // conditionalEnv);
               };
 

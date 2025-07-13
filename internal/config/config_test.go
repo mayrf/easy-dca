@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -10,6 +11,8 @@ func TestLoadConfig_Success(t *testing.T) {
 	t.Setenv("EASY_DCA_DRY_RUN", "false")
 	t.Setenv("EASY_DCA_PRICE_FACTOR", "0.95")
 	t.Setenv("EASY_DCA_MONTHLY_FIAT_SPENDING", "60.0")
+	t.Setenv("EASY_DCA_CRON", "")                // Explicitly unset
+	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "") // Explicitly unset
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -136,7 +139,7 @@ func TestLoadConfig_AutoAdjustMinOrderDefault(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
-	
+
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -151,7 +154,7 @@ func TestLoadConfig_AutoAdjustMinOrderEnabled(t *testing.T) {
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
 	t.Setenv("EASY_DCA_AUTO_ADJUST_MIN_ORDER", "true")
-	
+
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -166,7 +169,7 @@ func TestLoadConfig_AutoAdjustMinOrderDisabled(t *testing.T) {
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
 	t.Setenv("EASY_DCA_AUTO_ADJUST_MIN_ORDER", "false")
-	
+
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -180,8 +183,9 @@ func TestLoadConfig_SchedulerModeDefaultManual(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
-	// Don't set EASY_DCA_CRON or EASY_DCA_SCHEDULER_MODE
-	
+	t.Setenv("EASY_DCA_CRON", "")           // Explicitly unset
+	t.Setenv("EASY_DCA_SCHEDULER_MODE", "") // Explicitly unset
+
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -190,14 +194,13 @@ func TestLoadConfig_SchedulerModeDefaultManual(t *testing.T) {
 		t.Errorf("expected SchedulerMode 'manual' (default), got '%s'", cfg.SchedulerMode)
 	}
 }
-
 func TestLoadConfig_SchedulerModeDefaultCron(t *testing.T) {
 	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
 	t.Setenv("EASY_DCA_CRON", "0 8 * * *")
 	// Don't set EASY_DCA_SCHEDULER_MODE
-	
+
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -212,7 +215,7 @@ func TestLoadConfig_SchedulerModeExplicit(t *testing.T) {
 	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
 	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
 	t.Setenv("EASY_DCA_SCHEDULER_MODE", "systemd")
-	
+
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -254,24 +257,24 @@ func TestCalculateBuysPerMonth_WeeklyCron(t *testing.T) {
 
 func TestFormatBTC_SatsWithSeparators(t *testing.T) {
 	cfg := &Config{DisplaySats: true}
-	
+
 	tests := []struct {
 		amount float32
 		want   string
 	}{
-		{0.00001, "1,000"},           // 1000 sats
-		{0.0001, "10,000"},           // 10000 sats
-		{0.001, "100,000"},           // 100000 sats
-		{0.01, "1,000,000"},          // 1000000 sats
-		{0.1, "10,000,000"},          // 10000000 sats
-		{1.0, "100,000,000"},         // 100000000 sats
-		{0.00005, "5,000"},           // 5000 sats
-		{0.000123, "12,300"},         // 12300 sats
-		{0.000999, "99,900"},         // 99900 sats
-		{0.000001, "100"},            // 100 sats (no separator needed)
-		{0.000009, "900"},            // 900 sats (no separator needed)
+		{0.00001, "1,000"},   // 1000 sats
+		{0.0001, "10,000"},   // 10000 sats
+		{0.001, "100,000"},   // 100000 sats
+		{0.01, "1,000,000"},  // 1000000 sats
+		{0.1, "10,000,000"},  // 10000000 sats
+		{1.0, "100,000,000"}, // 100000000 sats
+		{0.00005, "5,000"},   // 5000 sats
+		{0.000123, "12,300"}, // 12300 sats
+		{0.000999, "99,900"}, // 99900 sats
+		{0.000001, "100"},    // 100 sats (no separator needed)
+		{0.000009, "900"},    // 900 sats (no separator needed)
 	}
-	
+
 	for _, tt := range tests {
 		got := cfg.FormatBTC(tt.amount)
 		if got != tt.want {
@@ -282,7 +285,7 @@ func TestFormatBTC_SatsWithSeparators(t *testing.T) {
 
 func TestFormatBTC_BTCWithoutSeparators(t *testing.T) {
 	cfg := &Config{DisplaySats: false}
-	
+
 	tests := []struct {
 		amount float32
 		want   string
@@ -297,11 +300,136 @@ func TestFormatBTC_BTCWithoutSeparators(t *testing.T) {
 		{0.000123, "0.00012300"},
 		{0.000999, "0.00099900"},
 	}
-	
+
 	for _, tt := range tests {
 		got := cfg.FormatBTC(tt.amount)
 		if got != tt.want {
 			t.Errorf("FormatBTC(%f) = %s, want %s", tt.amount, got, tt.want)
 		}
 	}
-} 
+}
+
+func TestLoadConfig_SystemdMode_RequiresFiatAmountPerBuy(t *testing.T) {
+	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
+	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
+	t.Setenv("EASY_DCA_SCHEDULER_MODE", "systemd")
+	t.Setenv("EASY_DCA_MONTHLY_FIAT_SPENDING", "300.0")
+	// Don't set EASY_DCA_FIAT_AMOUNT_PER_BUY
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error for systemd mode without EASY_DCA_FIAT_AMOUNT_PER_BUY, got nil")
+	}
+
+	expectedError := "EASY_DCA_FIAT_AMOUNT_PER_BUY is required in systemd mode"
+	if !strings.Contains(err.Error(), expectedError) {
+		t.Errorf("expected error to contain '%s', got '%s'", expectedError, err.Error())
+	}
+}
+
+func TestLoadConfig_SystemdMode_IgnoresMonthlyFiatSpending(t *testing.T) {
+	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
+	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
+	t.Setenv("EASY_DCA_SCHEDULER_MODE", "systemd")
+	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "10.0")
+	t.Setenv("EASY_DCA_MONTHLY_FIAT_SPENDING", "300.0")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if cfg.FiatAmountPerBuy != 10.0 {
+		t.Errorf("expected FiatAmountPerBuy 10.0, got %v", cfg.FiatAmountPerBuy)
+	}
+
+	if cfg.MonthlyFiatSpending != 0.0 {
+		t.Errorf("expected MonthlyFiatSpending to be ignored (0.0) in systemd mode, got %v", cfg.MonthlyFiatSpending)
+	}
+
+	if cfg.SchedulerMode != "systemd" {
+		t.Errorf("expected SchedulerMode 'systemd', got '%s'", cfg.SchedulerMode)
+	}
+
+	if cfg.BuysPerMonth != 1 {
+		t.Errorf("expected BuysPerMonth 1 in systemd mode, got %v", cfg.BuysPerMonth)
+	}
+}
+
+func TestLoadConfig_SystemdMode_WithOnlyFiatAmountPerBuy(t *testing.T) {
+	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
+	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
+	t.Setenv("EASY_DCA_SCHEDULER_MODE", "systemd")
+	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "25.0")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if cfg.FiatAmountPerBuy != 25.0 {
+		t.Errorf("expected FiatAmountPerBuy 25.0, got %v", cfg.FiatAmountPerBuy)
+	}
+
+	if cfg.MonthlyFiatSpending != 0.0 {
+		t.Errorf("expected MonthlyFiatSpending 0.0, got %v", cfg.MonthlyFiatSpending)
+	}
+
+	if cfg.SchedulerMode != "systemd" {
+		t.Errorf("expected SchedulerMode 'systemd', got '%s'", cfg.SchedulerMode)
+	}
+
+	if cfg.BuysPerMonth != 1 {
+		t.Errorf("expected BuysPerMonth 1 in systemd mode, got %v", cfg.BuysPerMonth)
+	}
+}
+
+func TestLoadConfig_NonSystemdMode_AllowsMonthlyFiatSpending(t *testing.T) {
+	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
+	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
+	t.Setenv("EASY_DCA_SCHEDULER_MODE", "manual")
+	t.Setenv("EASY_DCA_MONTHLY_FIAT_SPENDING", "300.0")
+	t.Setenv("EASY_DCA_CRON", "")                // Explicitly unset
+	t.Setenv("EASY_DCA_FIAT_AMOUNT_PER_BUY", "") // Explicitly unset
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if cfg.MonthlyFiatSpending != 300.0 {
+		t.Errorf("expected MonthlyFiatSpending 300.0, got %v", cfg.MonthlyFiatSpending)
+	}
+
+	if cfg.SchedulerMode != "manual" {
+		t.Errorf("expected SchedulerMode 'manual', got '%s'", cfg.SchedulerMode)
+	}
+
+	if cfg.BuysPerMonth != 1 {
+		t.Errorf("expected BuysPerMonth 1 in manual mode, got %v", cfg.BuysPerMonth)
+	}
+}
+func TestLoadConfig_CronMode_AllowsMonthlyFiatSpending(t *testing.T) {
+	t.Setenv("EASY_DCA_PUBLIC_KEY", "test-public")
+	t.Setenv("EASY_DCA_PRIVATE_KEY", "test-private")
+	t.Setenv("EASY_DCA_SCHEDULER_MODE", "cron")
+	t.Setenv("EASY_DCA_CRON", "0 8 * * *") // Daily at 8 AM
+	t.Setenv("EASY_DCA_MONTHLY_FIAT_SPENDING", "300.0")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if cfg.MonthlyFiatSpending != 300.0 {
+		t.Errorf("expected MonthlyFiatSpending 300.0, got %v", cfg.MonthlyFiatSpending)
+	}
+
+	if cfg.SchedulerMode != "cron" {
+		t.Errorf("expected SchedulerMode 'cron', got '%s'", cfg.SchedulerMode)
+	}
+
+	if cfg.BuysPerMonth < 28 || cfg.BuysPerMonth > 31 {
+		t.Errorf("expected BuysPerMonth ~30 for daily cron, got %v", cfg.BuysPerMonth)
+	}
+}

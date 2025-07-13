@@ -20,7 +20,7 @@ type TradingPair struct {
 // Supported trading pairs
 var supportedPairs = map[string]string{
 	"BTC/EUR": "EUR",
-	"BTC/GBP": "GBP", 
+	"BTC/GBP": "GBP",
 	"BTC/CHF": "CHF",
 	"BTC/AUD": "AUD",
 	"BTC/CAD": "CAD",
@@ -30,7 +30,7 @@ var supportedPairs = map[string]string{
 // NewTradingPair creates a new TradingPair with validation
 func NewTradingPair(pair string) (TradingPair, error) {
 	if _, exists := supportedPairs[pair]; !exists {
-		return TradingPair{}, fmt.Errorf("unsupported trading pair: %s. Supported pairs: %s", 
+		return TradingPair{}, fmt.Errorf("unsupported trading pair: %s. Supported pairs: %s",
 			pair, strings.Join(GetSupportedPairs(), ", "))
 	}
 	return TradingPair{value: pair}, nil
@@ -51,7 +51,7 @@ func (tp TradingPair) GetFiatCurrencyName() string {
 	currencyNames := map[string]string{
 		"EUR": "Euro",
 		"GBP": "British Pound",
-		"CHF": "Swiss Franc", 
+		"CHF": "Swiss Franc",
 		"AUD": "Australian Dollar",
 		"CAD": "Canadian Dollar",
 		"USD": "US Dollar",
@@ -80,7 +80,7 @@ type Config struct {
 	AutoAdjustMinOrder  bool        // If true, automatically adjust orders below minimum size; if false, let them fail
 	SchedulerMode       string      // Scheduler mode: "cron", "systemd", or "manual" (default: "cron" if EASY_DCA_CRON is set, otherwise "manual")
 
-	DisplaySats         bool        // If true, display all BTC amounts in satoshi
+	DisplaySats bool // If true, display all BTC amounts in satoshi
 
 	CronExpr     string // Cron expression for scheduling (optional)
 	BuysPerMonth int    // Number of buys per month (calculated from cron expression)
@@ -94,7 +94,7 @@ type Config struct {
 // ConfigureLogging sets up the log format based on environment variables
 func ConfigureLogging() {
 	logFormat := os.Getenv("EASY_DCA_LOG_FORMAT")
-	
+
 	switch strings.ToLower(logFormat) {
 	case "timestamp", "time":
 		// Standard timestamp format (2006/01/02 15:04:05)
@@ -111,30 +111,30 @@ func ConfigureLogging() {
 // logConfiguration prints a user-friendly summary of the loaded configuration
 func logConfiguration(cfg Config) {
 	log.Print("=== easy-dca Configuration Summary ===")
-	
+
 	// Trading pair
 	log.Printf("📊 Trading pair: %s", cfg.Pair.String())
 
 	// BTC unit
 	log.Printf("🪙  BTC unit: %s", cfg.GetBTCUnit())
-	
+
 	// Execution mode
 	if cfg.DryRun {
 		log.Print("🔍 DRY RUN MODE: Orders will be validated but not executed")
 	} else {
 		log.Print("🚀 LIVE TRADING MODE: Orders will be placed on Kraken")
 	}
-	
+
 	// Buy amount configuration
 	if cfg.FiatAmountPerBuy > 0 {
 		log.Printf("💰 Fixed amount per buy: %.2f %s", cfg.FiatAmountPerBuy, cfg.Pair.GetFiatCurrency())
 	} else if cfg.MonthlyFiatSpending > 0 {
-		log.Printf("💰 Monthly budget: %.2f %s (%.2f %s per buy, %d buys/month)", 
-			cfg.MonthlyFiatSpending, cfg.Pair.GetFiatCurrency(), 
-			cfg.MonthlyFiatSpending/float32(cfg.BuysPerMonth), cfg.Pair.GetFiatCurrency(), 
+		log.Printf("💰 Monthly budget: %.2f %s (%.2f %s per buy, %d buys/month)",
+			cfg.MonthlyFiatSpending, cfg.Pair.GetFiatCurrency(),
+			cfg.MonthlyFiatSpending/float32(cfg.BuysPerMonth), cfg.Pair.GetFiatCurrency(),
 			cfg.BuysPerMonth)
 	}
-	
+
 	// Price factor explanation
 	log.Printf("📈 Price factor: %.4f (%.2f%% of ask price)", cfg.PriceFactor, cfg.PriceFactor*100)
 	if cfg.PriceFactor >= 0.999 {
@@ -146,7 +146,7 @@ func logConfiguration(cfg Config) {
 	} else {
 		log.Print("   → Aggressive: Lower fill probability, higher potential savings")
 	}
-	
+
 	// Scheduling
 	if cfg.SchedulerMode == "systemd" {
 		log.Print("⏰ Schedule: Managed by systemd timer")
@@ -155,14 +155,14 @@ func logConfiguration(cfg Config) {
 	} else {
 		log.Printf("⏰ Schedule: Run once (%s mode)", cfg.SchedulerMode)
 	}
-	
+
 	// Order behavior
 	if cfg.AutoAdjustMinOrder {
 		log.Print("🔧 Auto-adjustment: Enabled (orders below minimum will be increased)")
 	} else {
 		log.Print("🔧 Auto-adjustment: Disabled (orders below minimum may fail)")
 	}
-	
+
 	// Notifications
 	if cfg.NotifyMethod != "" {
 		log.Printf("🔔 Notifications: %s", cfg.NotifyMethod)
@@ -177,14 +177,14 @@ func logConfiguration(cfg Config) {
 	} else {
 		log.Print("🔔 Notifications: Disabled")
 	}
-	
+
 	// API key source
 	if os.Getenv("EASY_DCA_PUBLIC_KEY_PATH") != "" {
 		log.Print("🔑 API keys: Loaded from file paths (secure)")
 	} else {
 		log.Print("🔑 API keys: Loaded from environment variables")
 	}
-	
+
 	log.Print("=====================================")
 }
 
@@ -290,7 +290,7 @@ func LoadConfig() (Config, error) {
 		return cfg, err
 	}
 	cfg.Pair = pair
-	
+
 	cfg.DryRun = getEnvAsBool("EASY_DCA_DRY_RUN", true)
 	cfg.PriceFactor = getEnvAsFloat32("EASY_DCA_PRICE_FACTOR", 0.998)
 	cfg.MonthlyFiatSpending = getEnvAsFloat32("EASY_DCA_MONTHLY_FIAT_SPENDING", 0.0)
@@ -308,23 +308,7 @@ func LoadConfig() (Config, error) {
 		return cfg, fmt.Errorf("priceFactor must be at least 0.95 (95%% of ask price) to ensure reasonable fill probability")
 	}
 
-	// 4. Validate amount configuration before complex calculations
-	if cfg.FiatAmountPerBuy == 0 && cfg.MonthlyFiatSpending == 0 {
-		return cfg, fmt.Errorf("either EASY_DCA_FIAT_AMOUNT_PER_BUY or EASY_DCA_MONTHLY_FIAT_SPENDING must be set")
-	}
-
-	if cfg.FiatAmountPerBuy > 0 && cfg.MonthlyFiatSpending > 0 {
-		log.Printf("Warning: Both EASY_DCA_FIAT_AMOUNT_PER_BUY (%.2f) and EASY_DCA_MONTHLY_FIAT_SPENDING (%.2f) are set. Amount per buy takes precedence.", cfg.FiatAmountPerBuy, cfg.MonthlyFiatSpending)
-	}
-
-	// 5. Do complex calculations (cron parsing) only after basic validation passes
-	buysPerMonth, err := calculateBuysPerMonth(cfg.CronExpr)
-	if err != nil {
-		return cfg, err
-	}
-	cfg.BuysPerMonth = buysPerMonth
-
-	// Set default scheduler mode based on configuration
+	// 4. Set default scheduler mode based on configuration
 	if cfg.SchedulerMode == "" {
 		if cfg.CronExpr != "" {
 			cfg.SchedulerMode = "cron"
@@ -333,7 +317,39 @@ func LoadConfig() (Config, error) {
 		}
 	}
 
-	// 6. Load optional notification configuration
+	// 5. Handle systemd mode: ignore monthly buy option and require fixed amount
+	if cfg.SchedulerMode == "systemd" {
+		if cfg.MonthlyFiatSpending > 0 {
+			log.Printf("Warning: EASY_DCA_MONTHLY_FIAT_SPENDING is set but ignored in systemd mode. Use EASY_DCA_FIAT_AMOUNT_PER_BUY instead.")
+			cfg.MonthlyFiatSpending = 0.0 // Ignore monthly spending in systemd mode
+		}
+		if cfg.FiatAmountPerBuy == 0 {
+			return cfg, fmt.Errorf("EASY_DCA_FIAT_AMOUNT_PER_BUY is required in systemd mode (monthly buy calculations are not supported)")
+		}
+	}
+
+	// 6. Validate amount configuration after systemd mode handling
+	if cfg.FiatAmountPerBuy == 0 && cfg.MonthlyFiatSpending == 0 {
+		return cfg, fmt.Errorf("either EASY_DCA_FIAT_AMOUNT_PER_BUY or EASY_DCA_MONTHLY_FIAT_SPENDING must be set")
+	}
+
+	if cfg.FiatAmountPerBuy > 0 && cfg.MonthlyFiatSpending > 0 {
+		log.Printf("Warning: Both EASY_DCA_FIAT_AMOUNT_PER_BUY (%.2f) and EASY_DCA_MONTHLY_FIAT_SPENDING (%.2f) are set. Amount per buy takes precedence.", cfg.FiatAmountPerBuy, cfg.MonthlyFiatSpending)
+	}
+
+	// 7. Do complex calculations (cron parsing) only for non-systemd modes
+	var buysPerMonth int
+	if cfg.SchedulerMode != "systemd" {
+		buysPerMonth, err = calculateBuysPerMonth(cfg.CronExpr)
+		if err != nil {
+			return cfg, err
+		}
+	} else {
+		buysPerMonth = 1 // Not used in systemd mode, but set to avoid division by zero
+	}
+	cfg.BuysPerMonth = buysPerMonth
+
+	// 8. Load optional notification configuration
 	cfg.NotifyMethod = os.Getenv("NOTIFY_METHOD")
 	cfg.NotifyNtfyTopic = os.Getenv("NOTIFY_NTFY_TOPIC")
 	cfg.NotifyNtfyURL = os.Getenv("NOTIFY_NTFY_URL")
@@ -349,7 +365,7 @@ func formatNumberWithSeparators(n int64) string {
 	if n < 1000 {
 		return fmt.Sprintf("%d", n)
 	}
-	
+
 	// Convert to string and add separators from right to left
 	str := fmt.Sprintf("%d", n)
 	result := ""
